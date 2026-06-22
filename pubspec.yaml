@@ -1,0 +1,32 @@
+name: tailor_billing
+description: Tailor Billing App
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  intl: ^0.18.1
+  shared_preferences: ^2.2.2
+  image_picker: ^1.0.7
+  uuid: ^4.3.3
+  provider: ^6.1.1
+  path_provider: ^2.1.2
+  share_plus: ^7.2.1
+  file_picker: ^8.0.0
+  flutter_native_contact_picker: ^0.0.7
+  http: ^1.2.2
+  url_launcher: ^6.2.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/logo.png
