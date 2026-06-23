@@ -222,6 +222,8 @@ async function saveOrUpdateOrderFromClient(clientOrder) {
 
   // 2. Resolve items
   const mappedItems = [];
+  let measurementsUpdated = false;
+
   for (const item of clientOrder.items) {
     let categoryDoc = await GarmentCategory.findOne({ id: item.categoryId });
     if (!categoryDoc) {
@@ -261,7 +263,6 @@ async function saveOrUpdateOrderFromClient(clientOrder) {
     });
 
     // Save/Update Customer measurements embedded inside customer document
-    let measurementsUpdated = false;
     if (Object.keys(measurementsObj).length > 0) {
       if (!customerDoc.indivvidualmeasurement) {
         customerDoc.indivvidualmeasurement = {};
