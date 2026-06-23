@@ -7,8 +7,29 @@ import '../utils/app_store.dart';
 import 'measurement_templates_screen.dart';
 import 'backup_restore_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late TextEditingController _mongodbController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize controller using the store's current URL
+    final store = Provider.of<AppStore>(context, listen: false);
+    _mongodbController = TextEditingController(text: store.mongodbUrl);
+  }
+
+  @override
+  void dispose() {
+    _mongodbController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,6 +37,7 @@ class SettingsScreen extends StatelessWidget {
       backgroundColor: AppTheme.surface,
       appBar: AppBar(
         title: const Text('Settings'),
+        automaticallyImplyLeading: false,
         elevation: 0,
         shape: const Border(
           bottom: BorderSide(color: AppTheme.border, width: 1),
@@ -31,7 +53,7 @@ class SettingsScreen extends StatelessWidget {
               _buildHeaderCard(),
               const SizedBox(height: 24),
               const Text(
-                'PAYMENT CONFIGURATION',
+                'DATABASE SYNCHRONIZATION',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -40,20 +62,6 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              _buildGpayCard(context),
-              const SizedBox(height: 24),
-              const Text(
-                'CLOUD SYNCHRONIZATION',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.textMid,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildSheetsCard(context),
-              const SizedBox(height: 16),
               _buildMongodbCard(context),
               const SizedBox(height: 24),
               const Text(
@@ -120,18 +128,18 @@ class SettingsScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.06),
-              shape: BoxShape.circle,
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.primary.withOpacity(0.2), width: 1.5),
+                image: const DecorationImage(
+                  image: AssetImage('assets/images/logo.png'),
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
-            child: const Icon(
-              Icons.storefront_outlined,
-              color: AppTheme.primary,
-              size: 32,
-            ),
-          ),
           const SizedBox(width: 16),
           const Expanded(
             child: Column(
@@ -161,331 +169,9 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildGpayCard(BuildContext context) {
-    final store = Provider.of<AppStore>(context);
-    final linkController = TextEditingController(text: store.gpayLink);
-    linkController.selection = TextSelection.fromPosition(TextPosition(offset: linkController.text.length));
-    
-    final numController = TextEditingController(text: store.gpayNumber);
-    numController.selection = TextSelection.fromPosition(TextPosition(offset: numController.text.length));
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.payment_outlined,
-                  color: Colors.green,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Google Pay & UPI Payment Settings',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textDark,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Appends payment details to shared WhatsApp bills',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textMid,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          
-          // UPI Link / URI Input
-          TextFormField(
-            controller: linkController,
-            style: const TextStyle(fontSize: 14),
-            decoration: InputDecoration(
-              hintText: 'e.g. upi://pay?pa=bhuvana@okaxis&pn=Bhuvana',
-              hintStyle: const TextStyle(fontSize: 13, color: AppTheme.textLight),
-              labelText: 'Paste Payment Link / UPI URI',
-              labelStyle: const TextStyle(fontSize: 13, color: AppTheme.textMid),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
-              ),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.check, color: Colors.green),
-                onPressed: () {
-                  store.updateGpayLink(linkController.text);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Payment link saved successfully!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                },
-              ),
-            ),
-            onFieldSubmitted: (val) {
-              store.updateGpayLink(val);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Payment link saved successfully!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          
-          // GPay Number Input
-          TextFormField(
-            controller: numController,
-            style: const TextStyle(fontSize: 14),
-            keyboardType: TextInputType.phone,
-            decoration: InputDecoration(
-              hintText: 'e.g. 9876543210',
-              hintStyle: const TextStyle(fontSize: 13, color: AppTheme.textLight),
-              labelText: 'Or Google Pay Phone Number',
-              labelStyle: const TextStyle(fontSize: 13, color: AppTheme.textMid),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
-              ),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.check, color: Colors.green),
-                onPressed: () {
-                  store.updateGpayNumber(numController.text);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Google Pay number saved successfully!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                },
-              ),
-            ),
-            onFieldSubmitted: (val) {
-              store.updateGpayNumber(val);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Google Pay number saved successfully!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSheetsCard(BuildContext context) {
-    final store = Provider.of<AppStore>(context);
-    final controller = TextEditingController(text: store.sheetsUrl);
-    controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppTheme.cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppTheme.info.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.cloud_sync_outlined,
-                  color: AppTheme.info,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Google Sheets Cloud Integration',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textDark,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      store.syncStatus.isNotEmpty
-                          ? 'Status: ${store.syncStatus}'
-                          : 'Enter your Apps Script Web App URL',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: store.syncStatus.contains('successful') || store.syncStatus.contains('successful')
-                            ? Colors.green
-                            : store.syncStatus.contains('pending') || store.syncStatus.contains('Fetching')
-                                ? AppTheme.warning
-                                : store.syncStatus.contains('failed')
-                                    ? Colors.red
-                                    : AppTheme.textMid,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: controller,
-            style: const TextStyle(fontSize: 14),
-            decoration: InputDecoration(
-              hintText: 'https://script.google.com/macros/s/.../exec',
-              hintStyle: const TextStyle(fontSize: 13, color: AppTheme.textLight),
-              labelText: 'Paste Web App URL',
-              labelStyle: const TextStyle(fontSize: 13, color: AppTheme.textMid),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
-              ),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.check, color: Colors.green),
-                onPressed: () {
-                  store.updateSheetsUrl(controller.text);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Sync URL saved successfully!'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                },
-              ),
-            ),
-            onFieldSubmitted: (val) {
-              store.updateSheetsUrl(val);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Sync URL saved successfully!'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: store.isSyncing || store.sheetsUrl.isEmpty
-                      ? null
-                      : () async {
-                          await store.syncWithGoogleSheets();
-                        },
-                  icon: store.isSyncing && store.syncStatus.contains('Syncing')
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.cloud_upload_outlined, size: 16, color: Colors.white),
-                  label: const Text('Upload (Sync)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: store.isSyncing || store.sheetsUrl.isEmpty
-                      ? null
-                      : () async {
-                          final success = await store.pullFromGoogleSheets();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(success
-                                    ? 'Data successfully restored from cloud!'
-                                    : 'Failed to restore data from cloud.'),
-                                backgroundColor: success ? Colors.green : Colors.red,
-                              ),
-                            );
-                          }
-                        },
-                  icon: store.isSyncing && store.syncStatus.contains('Fetching')
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent),
-                        )
-                      : const Icon(Icons.cloud_download_outlined, size: 16, color: AppTheme.accent),
-                  label: const Text('Download (Restore)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.accent)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.accent,
-                    side: const BorderSide(color: AppTheme.accent),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildMongodbCard(BuildContext context) {
     final store = Provider.of<AppStore>(context);
-    final controller = TextEditingController(text: store.mongodbUrl);
-    controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
+    _mongodbController.selection = TextSelection.fromPosition(TextPosition(offset: _mongodbController.text.length));
     const mongoGreen = Color(0xFF47A248);
 
     return Container(
@@ -563,10 +249,10 @@ class SettingsScreen extends StatelessWidget {
           if (store.isMongodbEnabled) ...[
             const SizedBox(height: 16),
             TextFormField(
-              controller: controller,
+              controller: _mongodbController,
               style: const TextStyle(fontSize: 14),
               decoration: InputDecoration(
-                hintText: 'http://localhost:5000/api',
+                hintText: 'https://billing-app-tllw.onrender.com/api',
                 hintStyle: const TextStyle(fontSize: 13, color: AppTheme.textLight),
                 labelText: 'Paste Backend API URL',
                 labelStyle: const TextStyle(fontSize: 13, color: AppTheme.textMid),
@@ -582,7 +268,7 @@ class SettingsScreen extends StatelessWidget {
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.check, color: Colors.green),
                   onPressed: () {
-                    store.updateMongodbUrl(controller.text);
+                    store.updateMongodbUrl(_mongodbController.text);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('MongoDB API URL saved successfully!'),

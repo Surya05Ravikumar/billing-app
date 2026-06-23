@@ -108,9 +108,6 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
       final item = order.items[i];
       buffer.writeln('${i + 1}. ${item.customName ?? item.categoryName} (Qty: ${item.quantity})');
       buffer.writeln('   Price: ₹${fmt.format(item.price)} | Total: ₹${fmt.format(item.total)}');
-      if (item.notes != null && item.notes!.isNotEmpty) {
-        buffer.writeln('   Customization: ${item.notes}');
-      }
     }
     
     buffer.writeln('----------------------------------------');
@@ -323,16 +320,6 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                       ),
                                     ],
                                   ),
-                                  if (item.notes != null && item.notes!.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Note: ${item.notes}',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppTheme.accent.withOpacity(0.9),
-                                          fontStyle: FontStyle.italic),
-                                    ),
-                                  ],
                                 ],
                               ),
                             )),

@@ -1,6 +1,7 @@
 // lib/utils/app_store.dart
 
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -34,7 +35,7 @@ class AppStore extends ChangeNotifier {
   String get syncStatus => _syncStatus;
 
   // MongoDB configuration
-  String _mongodbUrl = 'http://localhost:5000/api';
+  String _mongodbUrl = 'https://billing-app-tllw.onrender.com/api';
   String get mongodbUrl => _mongodbUrl;
 
   bool _isMongodbEnabled = false;
@@ -45,6 +46,13 @@ class AppStore extends ChangeNotifier {
 
   bool _isMongodbSyncing = false;
   bool get isMongodbSyncing => _isMongodbSyncing;
+
+  // Offline Sync Queue variables
+  List<SyncTask> _syncQueue = [];
+  List<SyncTask> get syncQueue => List.unmodifiable(_syncQueue);
+  Timer? _syncTimer;
+  bool _isProcessingQueue = false;
+  bool get isProcessingQueue => _isProcessingQueue;
 
   // Dashboard stats
   int get todayOrdersCount {
@@ -74,9 +82,22 @@ class AppStore extends ChangeNotifier {
     _sheetsUrl = prefs.getString('sheetsUrl') ?? '';
     _syncStatus = _sheetsUrl.isNotEmpty ? 'Sync pending (offline)' : '';
 
-    _mongodbUrl = prefs.getString('mongodbUrl') ?? 'http://localhost:5000/api';
+    _mongodbUrl = prefs.getString('mongodbUrl') ?? 'https://billing-app-tllw.onrender.com/api';
+    // Remove the override that forces it back to render
     _isMongodbEnabled = prefs.getBool('isMongodbEnabled') ?? false;
-    _mongodbSyncStatus = _isMongodbEnabled ? 'Connected (local cache)' : '';
+    
+    // Load offline sync queue
+    final queueJson = prefs.getString('syncQueue');
+    if (queueJson != null) {
+      final list = jsonDecode(queueJson) as List;
+      _syncQueue = list.map((e) => SyncTask.fromJson(e)).toList();
+    }
+    
+    _mongodbSyncStatus = _isMongodbEnabled 
+        ? (_syncQueue.isEmpty ? 'Connected (Synced)' : 'Sync pending (${_syncQueue.length} offline)')
+        : '';
+
+    startSyncTimer();
 
     final ordersJson = prefs.getString('orders');
     if (ordersJson != null) {
@@ -227,17 +248,60 @@ class AppStore extends ChangeNotifier {
     }
     order.invoiceNo = (maxInvoice + 1).toString();
     _orders.insert(0, order);
+    _updateCustomerMeasurementsLocally(order);
     await _save();
+    
     if (_isMongodbEnabled) {
-      _apiPost('orders', order.toJson());
+      try {
+        final url = '$_mongodbUrl/orders';
+        final response = await http.post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(order.toJson()),
+        ).timeout(const Duration(seconds: 5));
+        
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final decoded = jsonDecode(response.body);
+          if (decoded['invoiceNo'] != null) {
+            order.invoiceNo = decoded['invoiceNo'].toString();
+            await _save();
+          }
+        } else {
+          _addToQueue(SyncTask(action: 'POST', endpoint: 'orders', id: order.id, data: order.toJson()));
+        }
+      } catch (_) {
+        _addToQueue(SyncTask(action: 'POST', endpoint: 'orders', id: order.id, data: order.toJson()));
+      }
     }
     notifyListeners();
+  }
+
+  /// Updates the local Customer object's measurements map from order items.
+  /// This ensures auto-fill works even before a full MongoDB sync.
+  void _updateCustomerMeasurementsLocally(Order order) {
+    final custIdx = _customers.indexWhere((c) => c.id == order.customerId);
+    if (custIdx == -1) return;
+    final customer = _customers[custIdx];
+    for (final item in order.items) {
+      if (item.measurements.isNotEmpty) {
+        final filledMeasurements = item.measurements
+            .where((m) => m.value != null && m.value!.isNotEmpty)
+            .toList();
+        if (filledMeasurements.isNotEmpty) {
+          customer.indivvidualmeasurement[item.categoryName.toLowerCase()] = filledMeasurements
+              .map((m) => MeasurementField(name: m.name, value: m.value))
+              .toList();
+        }
+      }
+    }
+    // No notifyListeners here — caller does it
   }
 
   Future<void> updateOrder(Order order) async {
     final idx = _orders.indexWhere((o) => o.id == order.id);
     if (idx != -1) {
       _orders[idx] = order;
+      _updateCustomerMeasurementsLocally(order);
       await _save();
       if (_isMongodbEnabled) {
         _apiPut('orders', order.id, order.toJson());
@@ -256,18 +320,37 @@ class AppStore extends ChangeNotifier {
   }
 
   // Customers
-  Future<Customer> addCustomer(String name, String phone, {String? address}) async {
+  Future<Customer> addCustomer(String name, String phone) async {
     final customer = Customer(
       id: _uuid.v4(),
       name: name,
       phone: phone,
-      address: address,
       createdAt: DateTime.now(),
     );
     _customers.add(customer);
     await _save();
+    
     if (_isMongodbEnabled) {
-      _apiPost('customers', customer.toJson());
+      try {
+        final url = '$_mongodbUrl/customers';
+        final response = await http.post(
+          Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(customer.toJson()),
+        ).timeout(const Duration(seconds: 5));
+        
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final decoded = jsonDecode(response.body);
+          if (decoded['customerId'] != null) {
+            customer.customerId = decoded['customerId'].toString();
+            await _save();
+          }
+        } else {
+          _addToQueue(SyncTask(action: 'POST', endpoint: 'customers', id: customer.id, data: customer.toJson()));
+        }
+      } catch (_) {
+        _addToQueue(SyncTask(action: 'POST', endpoint: 'customers', id: customer.id, data: customer.toJson()));
+      }
     }
     notifyListeners();
     return customer;
@@ -670,10 +753,12 @@ class AppStore extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isMongodbEnabled', _isMongodbEnabled);
     if (_isMongodbEnabled) {
-      _mongodbSyncStatus = 'Connected (local cache)';
-      syncWithMongoDB(); // Auto sync when enabled
+      _mongodbSyncStatus = _syncQueue.isEmpty ? 'Connected (Synced)' : 'Sync pending (${_syncQueue.length} offline)';
+      startSyncTimer();
+      _processSyncQueue();
     } else {
       _mongodbSyncStatus = '';
+      _syncTimer?.cancel();
     }
     notifyListeners();
   }
@@ -784,41 +869,171 @@ class AppStore extends ChangeNotifier {
 
   Future<void> _apiPost(String endpoint, Map<String, dynamic> body) async {
     if (!_isMongodbEnabled) return;
+    final id = body['id'] ?? '';
     try {
       final url = '$_mongodbUrl/$endpoint';
-      await http.post(
+      final response = await http.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
       ).timeout(const Duration(seconds: 4));
-    } catch (e) {
-      if (kDebugMode) print('MongoDB POST API error: $e');
-    }
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        _processSyncQueue();
+        return;
+      }
+    } catch (_) {}
+    _addToQueue(SyncTask(action: 'POST', endpoint: endpoint, id: id, data: body));
   }
 
   Future<void> _apiPut(String endpoint, String id, Map<String, dynamic> body) async {
     if (!_isMongodbEnabled) return;
     try {
       final url = '$_mongodbUrl/$endpoint/$id';
-      await http.put(
+      final response = await http.put(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
       ).timeout(const Duration(seconds: 4));
-    } catch (e) {
-      if (kDebugMode) print('MongoDB PUT API error: $e');
-    }
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        _processSyncQueue();
+        return;
+      }
+    } catch (_) {}
+    _addToQueue(SyncTask(action: 'PUT', endpoint: endpoint, id: id, data: body));
   }
 
   Future<void> _apiDelete(String endpoint, String id) async {
     if (!_isMongodbEnabled) return;
     try {
       final url = '$_mongodbUrl/$endpoint/$id';
-      await http.delete(
+      final response = await http.delete(
         Uri.parse(url),
       ).timeout(const Duration(seconds: 4));
-    } catch (e) {
-      if (kDebugMode) print('MongoDB DELETE API error: $e');
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        _processSyncQueue();
+        return;
+      }
+    } catch (_) {}
+    _addToQueue(SyncTask(action: 'DELETE', endpoint: endpoint, id: id));
+  }
+
+  // --- Offline Sync Queue Helpers ---
+
+  void _addToQueue(SyncTask task) {
+    final existingIndex = _syncQueue.indexWhere((t) => t.id == task.id && t.endpoint == task.endpoint);
+    if (existingIndex != -1) {
+      final existingTask = _syncQueue[existingIndex];
+      if (existingTask.action == 'POST' && task.action == 'PUT') {
+        _syncQueue[existingIndex] = SyncTask(action: 'POST', endpoint: task.endpoint, id: task.id, data: task.data);
+      } else if (existingTask.action == 'POST' && task.action == 'DELETE') {
+        _syncQueue.removeAt(existingIndex);
+      } else if (existingTask.action == 'PUT' && task.action == 'DELETE') {
+        _syncQueue[existingIndex] = task;
+      } else {
+        _syncQueue[existingIndex] = task;
+      }
+    } else {
+      _syncQueue.add(task);
+    }
+    _saveQueue();
+    _mongodbSyncStatus = 'Sync pending (${_syncQueue.length} offline)';
+    notifyListeners();
+  }
+
+  Future<void> _saveQueue() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('syncQueue', jsonEncode(_syncQueue.map((e) => e.toJson()).toList()));
+  }
+
+  void startSyncTimer() {
+    _syncTimer?.cancel();
+    _syncTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (_isMongodbEnabled && _syncQueue.isNotEmpty) {
+        _processSyncQueue();
+      }
+    });
+  }
+
+  Future<void> _processSyncQueue() async {
+    if (_syncQueue.isEmpty || _isProcessingQueue || !_isMongodbEnabled) return;
+    _isProcessingQueue = true;
+    notifyListeners();
+
+    List<SyncTask> successfullySynced = [];
+    try {
+      for (final task in List<SyncTask>.from(_syncQueue)) {
+        bool success = false;
+        try {
+          if (task.action == 'POST') {
+            final url = '$_mongodbUrl/${task.endpoint}';
+            final res = await http.post(
+              Uri.parse(url),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(task.data),
+            ).timeout(const Duration(seconds: 4));
+            success = res.statusCode >= 200 && res.statusCode < 300;
+          } else if (task.action == 'PUT') {
+            final url = '$_mongodbUrl/${task.endpoint}/${task.id}';
+            final res = await http.put(
+              Uri.parse(url),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(task.data),
+            ).timeout(const Duration(seconds: 4));
+            success = res.statusCode >= 200 && res.statusCode < 300;
+          } else if (task.action == 'DELETE') {
+            final url = '$_mongodbUrl/${task.endpoint}/${task.id}';
+            final res = await http.delete(Uri.parse(url)).timeout(const Duration(seconds: 4));
+            success = res.statusCode >= 200 && res.statusCode < 300;
+          }
+        } catch (_) {
+          success = false;
+        }
+
+        if (success) {
+          successfullySynced.add(task);
+        } else {
+          break;
+        }
+      }
+
+      if (successfullySynced.isNotEmpty) {
+        _syncQueue.removeWhere((t) => successfullySynced.contains(t));
+        await _saveQueue();
+        _mongodbSyncStatus = _syncQueue.isEmpty ? 'Connected (Synced)' : 'Sync pending (${_syncQueue.length} offline)';
+      }
+    } finally {
+      _isProcessingQueue = false;
+      notifyListeners();
     }
   }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+}
+
+// Model class to represent offline pending tasks
+class SyncTask {
+  final String action; // 'POST' | 'PUT' | 'DELETE'
+  final String endpoint; // 'orders' | 'customers' | 'categories'
+  final String id;
+  final Map<String, dynamic>? data;
+
+  SyncTask({required this.action, required this.endpoint, required this.id, this.data});
+
+  Map<String, dynamic> toJson() => {
+    'action': action,
+    'endpoint': endpoint,
+    'id': id,
+    'data': data,
+  };
+
+  factory SyncTask.fromJson(Map<String, dynamic> json) => SyncTask(
+    action: json['action'],
+    endpoint: json['endpoint'],
+    id: json['id'],
+    data: json['data'] != null ? Map<String, dynamic>.from(json['data']) : null,
+  );
 }

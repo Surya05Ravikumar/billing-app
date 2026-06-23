@@ -1,14 +1,20 @@
 // lib/screens/customer_detail_screen.dart
 
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
 import '../utils/app_store.dart';
 import '../utils/theme.dart';
 import '../widgets/shared.dart';
 import 'orders_list_screen.dart';
 import 'invoice_preview_screen.dart';
+import 'package:share_plus/share_plus.dart';
 
 class CustomerDetailScreen extends StatefulWidget {
   final Customer customer;
@@ -112,6 +118,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 children: [
                   // Financial Stats Cards
                   _buildStatsSection(totalOrders, totalPaid, totalDue, fmt),
+                  if (totalDue > 0) ...[
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.accent,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: const Text('Consolidated Pending Bill', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      onPressed: () => _showConsolidatedBillSheet(context, refreshed, customerOrders),
+                    ),
+                  ],
                   const SizedBox(height: 24),
 
                   // Latest Measurements section
@@ -164,7 +184,25 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               color: AppTheme.textDark,
             ),
           ),
-          const SizedBox(height: 4),
+          if (customer.customerId != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                customer.customerId!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primary,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -180,35 +218,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               ),
             ],
           ),
-          if (customer.address != null && customer.address!.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.location_on_outlined, size: 14, color: AppTheme.accent),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      customer.address!,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: AppTheme.textMid,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -475,7 +484,247 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ],
     );
   }
+
+  void _showConsolidatedBillSheet(BuildContext context, Customer customer, List<Order> orders) {
+    final pendingOrders = orders.where((o) => !o.isPaid && o.pendingAmount > 0).toList();
+    final totalDue = pendingOrders.fold<double>(0.0, (sum, o) => sum + o.pendingAmount);
+    final fmt = NumberFormat('#,##0.00', 'en_IN');
+    final GlobalKey billKey = GlobalKey();
+
+    Future<void> shareAsImage(BuildContext sheetCtx) async {
+      try {
+        final RenderRepaintBoundary boundary =
+            billKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+        final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+        final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) return;
+        final Uint8List pngBytes = byteData.buffer.asUint8List();
+        final tempDir = await getTemporaryDirectory();
+        final safeName = customer.name.replaceAll(RegExp(r'[^\w]'), '_');
+        final filePath = '${tempDir.path}/consolidated_bill_$safeName.png';
+        await File(filePath).writeAsBytes(pngBytes);
+        await Share.shareXFiles([XFile(filePath, mimeType: 'image/png')]);
+      } catch (e) {
+        if (sheetCtx.mounted) {
+          ScaffoldMessenger.of(sheetCtx).showSnackBar(
+            SnackBar(content: Text('Failed to share image: $e'), backgroundColor: AppTheme.accent),
+          );
+        }
+      }
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => Container(
+        height: MediaQuery.of(sheetCtx).size.height * 0.87,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sheet header (not captured in image)
+            Row(
+              children: [
+                const Icon(Icons.receipt_long_outlined, color: AppTheme.accent, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  'Consolidated Bill',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.textDark),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(sheetCtx),
+                ),
+              ],
+            ),
+            const Divider(),
+            const SizedBox(height: 8),
+            // Scrollable content wrapped in RepaintBoundary for image capture
+            Expanded(
+              child: SingleChildScrollView(
+                child: RepaintBoundary(
+                  key: billKey,
+                  child: Container(
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Bill header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(customer.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.textDark)),
+                                Text(customer.phone, style: const TextStyle(fontSize: 13, color: AppTheme.textMid)),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text('Total Pending Balance', style: TextStyle(fontSize: 11, color: AppTheme.textLight, fontWeight: FontWeight.bold)),
+                                Text('₹${fmt.format(totalDue)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.accent)),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        // Pending orders list
+                        if (pendingOrders.isEmpty)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text('No pending bills found.', style: TextStyle(color: AppTheme.textMid)),
+                            ),
+                          )
+                        else
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: pendingOrders.length,
+                            itemBuilder: (_, idx) {
+                              final o = pendingOrders[idx];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 14),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: const BorderSide(color: AppTheme.border),
+                                ),
+                                color: AppTheme.surface,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text('Bill ID: #${o.invoiceNo ?? "1001"}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary, fontSize: 14)),
+                                          Text('Due: ${DateFormat('dd MMM yyyy').format(o.deliveryDate)}', style: const TextStyle(fontSize: 12, color: AppTheme.textMid)),
+                                        ],
+                                      ),
+                                      const Divider(height: 16),
+                                      ...o.items.map((item) => Padding(
+                                            padding: const EdgeInsets.only(bottom: 8.0),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Expanded(child: Text('${item.customName ?? item.categoryName} x ${item.quantity}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textDark))),
+                                                    Text('₹${fmt.format(item.total)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textDark)),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          )),
+                                      const Divider(height: 16),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text('Bill Pending:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textMid)),
+                                          Text('₹${fmt.format(o.pendingAmount)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.accent)),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        if (pendingOrders.isNotEmpty) ...[
+                          const Divider(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Total Outstanding:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textDark)),
+                              Text('₹${fmt.format(totalDue)}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppTheme.accent)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          const Center(
+                            child: Text('— Bhuvana Tailoring —', style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontStyle: FontStyle.italic)),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // Two share buttons
+            if (pendingOrders.isNotEmpty) Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.success,
+                      side: const BorderSide(color: AppTheme.success),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.text_snippet_outlined, size: 18),
+                    label: const Text('Text', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () {
+                      final buffer = StringBuffer();
+                      buffer.writeln('📋 *CONSOLIDATED BILL STATEMENT*');
+                      buffer.writeln('--------------------------------');
+                      buffer.writeln('*Customer:* ${customer.name}');
+                      buffer.writeln('*Mobile:* ${customer.phone}');
+                      buffer.writeln('--------------------------------');
+                      buffer.writeln('');
+                      for (final o in pendingOrders) {
+                        buffer.writeln('🔹 *Bill ID: #${o.invoiceNo ?? "1001"}* (Due: ${DateFormat('dd MMM yyyy').format(o.deliveryDate)})');
+                        for (final item in o.items) {
+                          buffer.writeln('  • ${item.customName ?? item.categoryName} x ${item.quantity} = ₹${fmt.format(item.total)}');
+                        }
+                        buffer.writeln('  *Pending amount:* ₹${fmt.format(o.pendingAmount)}');
+                        buffer.writeln('');
+                      }
+                      buffer.writeln('--------------------------------');
+                      buffer.writeln('💰 *Total Outstanding Balance: ₹${fmt.format(totalDue)}*');
+                      buffer.writeln('');
+                      buffer.writeln('Thank you for choosing *Bhuvana Tailoring*!');
+                      Share.share(buffer.toString());
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.image_outlined, size: 18),
+                    label: const Text('Share Image', style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: () => shareAsImage(sheetCtx),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
 
 class _StatCard extends StatelessWidget {
   final String title;
@@ -664,21 +913,18 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameCtrl;
   late TextEditingController _phoneCtrl;
-  late TextEditingController _addressCtrl;
 
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.customer.name);
     _phoneCtrl = TextEditingController(text: widget.customer.phone);
-    _addressCtrl = TextEditingController(text: widget.customer.address ?? '');
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
-    _addressCtrl.dispose();
     super.dispose();
   }
 
@@ -690,7 +936,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
       id: widget.customer.id,
       name: _nameCtrl.text.trim(),
       phone: _phoneCtrl.text.trim(),
-      address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
       createdAt: widget.customer.createdAt,
     );
 
@@ -731,13 +976,6 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                 controller: _phoneCtrl,
                 keyboardType: TextInputType.phone,
                 validator: (v) => v!.trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              AppTextField(
-                label: 'Address Details',
-                controller: _addressCtrl,
-                maxLines: 2,
-                hint: 'House name, Street, Landmark...',
               ),
               const SizedBox(height: 20),
               ElevatedButton(

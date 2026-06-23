@@ -26,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const _DashboardTab(),
     const OrdersListScreen(),
     const CustomersScreen(),
+    const SettingsScreen(),
   ];
 
   @override
@@ -58,6 +59,11 @@ class _HomeScreenState extends State<HomeScreen> {
             activeIcon: Icon(Icons.people),
             label: 'Customers',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined),
+            activeIcon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
         ],
       ),
     );
@@ -86,12 +92,16 @@ class _DashboardTab extends StatelessWidget {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: AppTheme.accent.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(8),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.accent.withOpacity(0.2), width: 1.5),
+                image: const DecorationImage(
+                  image: AssetImage('assets/images/logo.png'),
+                  fit: BoxFit.cover,
+                ),
               ),
-              child: const Icon(Icons.content_cut, color: AppTheme.accent, size: 16),
             ),
             const SizedBox(width: 10),
             Column(
@@ -119,15 +129,6 @@ class _DashboardTab extends StatelessWidget {
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: AppTheme.textDark, size: 22),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

@@ -160,11 +160,33 @@ class _CustomerCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(customer.name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: AppTheme.textDark)),
+                  Row(
+                    children: [
+                      Text(customer.name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: AppTheme.textDark)),
+                      if (customer.customerId != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withOpacity(0.08),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            customer.customerId!,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                   const SizedBox(height: 2),
                   Text(customer.phone,
                       style: const TextStyle(fontSize: 12, color: AppTheme.textMid)),
@@ -221,40 +243,55 @@ class _CustomerFormSheetState extends State<_CustomerFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameCtrl;
   late TextEditingController _phoneCtrl;
-  late TextEditingController _addressCtrl;
 
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.existing?.name ?? '');
     _phoneCtrl = TextEditingController(text: widget.existing?.phone ?? '');
-    _addressCtrl = TextEditingController(text: widget.existing?.address ?? '');
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
-    _addressCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final store = context.read<AppStore>();
+    final nameVal = _nameCtrl.text.trim();
+    final phoneVal = _phoneCtrl.text.trim();
+
+    final duplicate = store.customers.where((c) {
+      if (widget.existing != null && c.id == widget.existing!.id) return false;
+      return c.name.toLowerCase() == nameVal.toLowerCase() || c.phone == phoneVal;
+    }).firstOrNull;
+
+    if (duplicate != null) {
+      String msg = 'A customer with this ';
+      if (duplicate.name.toLowerCase() == nameVal.toLowerCase() && duplicate.phone == phoneVal) {
+        msg += 'name and phone number already exists.';
+      } else if (duplicate.name.toLowerCase() == nameVal.toLowerCase()) {
+        msg += 'name already exists.';
+      } else {
+        msg += 'phone number already exists.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg), backgroundColor: Colors.red),
+      );
+      return;
+    }
 
     if (widget.existing != null) {
-      widget.existing!.name = _nameCtrl.text.trim();
-      widget.existing!.phone = _phoneCtrl.text.trim();
-      widget.existing!.address = _addressCtrl.text.trim().isEmpty
-          ? null
-          : _addressCtrl.text.trim();
+      widget.existing!.name = nameVal;
+      widget.existing!.phone = phoneVal;
       await store.updateCustomer(widget.existing!);
     } else {
       await store.addCustomer(
-        _nameCtrl.text.trim(),
-        _phoneCtrl.text.trim(),
-        address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
+        nameVal,
+        phoneVal,
       );
     }
 

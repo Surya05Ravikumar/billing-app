@@ -21,6 +21,20 @@ class BackupRestoreScreen extends StatefulWidget {
 class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   bool _isLoading = false;
   String _statusMessage = '';
+  late TextEditingController _sheetsController;
+
+  @override
+  void initState() {
+    super.initState();
+    final store = Provider.of<AppStore>(context, listen: false);
+    _sheetsController = TextEditingController(text: store.sheetsUrl);
+  }
+
+  @override
+  void dispose() {
+    _sheetsController.dispose();
+    super.dispose();
+  }
 
   Future<void> _exportBackup() async {
     setState(() {
@@ -245,9 +259,31 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                   const SizedBox(height: 12),
                   _buildStatsSection(store),
                   const SizedBox(height: 24),
+                  const Text(
+                    'OFFLINE DATA BACKUP (JSON FILE)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textMid,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   _buildBackupCard(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   _buildRestoreCard(),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'CLOUD DATA BACKUP (GOOGLE SHEETS)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textMid,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildGoogleSheetsCloudCard(context, store),
                   const SizedBox(height: 30),
                 ],
               ),
@@ -477,6 +513,208 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+  Widget _buildGoogleSheetsCloudCard(BuildContext context, AppStore store) {
+    _sheetsController.selection = TextSelection.fromPosition(TextPosition(offset: _sheetsController.text.length));
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.info.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.cloud_sync_outlined,
+                  color: AppTheme.info,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Google Sheets Integration',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      store.syncStatus.isNotEmpty
+                          ? 'Status: ${store.syncStatus}'
+                          : 'Enter your Apps Script Web App URL',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: store.syncStatus.contains('successful')
+                            ? Colors.green
+                            : store.syncStatus.contains('pending') || store.syncStatus.contains('Fetching')
+                                ? AppTheme.warning
+                                : store.syncStatus.contains('failed')
+                                    ? Colors.red
+                                    : AppTheme.textMid,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _sheetsController,
+            style: const TextStyle(fontSize: 14),
+            decoration: InputDecoration(
+              hintText: 'https://script.google.com/macros/s/.../exec',
+              hintStyle: const TextStyle(fontSize: 13, color: AppTheme.textLight),
+              labelText: 'Paste Web App URL',
+              labelStyle: const TextStyle(fontSize: 13, color: AppTheme.textMid),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppTheme.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
+              ),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.check, color: Colors.green),
+                onPressed: () {
+                  store.updateSheetsUrl(_sheetsController.text);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Sync URL saved successfully!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                },
+              ),
+            ),
+            onFieldSubmitted: (val) {
+              store.updateSheetsUrl(val);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Sync URL saved successfully!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: store.isSyncing || store.sheetsUrl.isEmpty
+                      ? null
+                      : () async {
+                          setState(() {
+                            _isLoading = true;
+                            _statusMessage = 'Syncing data to Google Sheets...';
+                          });
+                          await store.syncWithGoogleSheets();
+                          setState(() {
+                            _isLoading = false;
+                            _statusMessage = '';
+                          });
+                        },
+                  icon: const Icon(Icons.cloud_upload_outlined, size: 16, color: Colors.white),
+                  label: const Text('Upload (Sync)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: store.isSyncing || store.sheetsUrl.isEmpty
+                      ? null
+                      : () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Row(
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 28),
+                                  SizedBox(width: 8),
+                                  Text('Overwrite Local Data?'),
+                                ],
+                              ),
+                              content: const Text(
+                                'This will replace all current app data with the data from your Google Sheet.\n\nAre you sure you want to proceed?',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text('Cancel', style: TextStyle(color: AppTheme.textMid)),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text('Yes, Overwrite'),
+                                ),
+                              ],
+                            ),
+                          );
+
+                          if (confirm != true) return;
+
+                          setState(() {
+                            _isLoading = true;
+                            _statusMessage = 'Downloading data from Google Sheets...';
+                          });
+                          final success = await store.pullFromGoogleSheets();
+                          setState(() {
+                            _isLoading = false;
+                            _statusMessage = '';
+                          });
+                          
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(success
+                                    ? 'Data successfully restored from Google Sheets!'
+                                    : 'Failed to restore data from Google Sheets.'),
+                                backgroundColor: success ? Colors.green : Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                  icon: const Icon(Icons.cloud_download_outlined, size: 16, color: AppTheme.accent),
+                  label: const Text('Download (Restore)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.accent)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.accent,
+                    side: const BorderSide(color: AppTheme.accent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

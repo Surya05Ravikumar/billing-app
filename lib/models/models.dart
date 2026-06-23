@@ -4,34 +4,84 @@
 
 class Customer {
   final String id;
+  String? customerId;
   String name;
   String phone;
-  String? address;
   DateTime createdAt;
+  // categoryName -> list of measurements (synced from MongoDB embedded measurements map)
+  Map<String, List<MeasurementField>> indivvidualmeasurement;
 
   Customer({
     required this.id,
+    this.customerId,
     required this.name,
     required this.phone,
-    this.address,
     required this.createdAt,
-  });
+    Map<String, List<MeasurementField>>? indivvidualmeasurement,
+  }) : indivvidualmeasurement = indivvidualmeasurement ?? {};
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'customerId': customerId,
         'name': name,
         'phone': phone,
-        'address': address,
         'createdAt': createdAt.toIso8601String(),
+        // Serialize measurements as { categoryName: { fieldName: value } }
+        'indivvidualmeasurement': indivvidualmeasurement.isEmpty
+            ? null
+            : indivvidualmeasurement.map((catName, fields) => MapEntry(
+                catName,
+                Map.fromEntries(
+                  fields
+                      .where((f) => f.value != null && f.value!.isNotEmpty)
+                      .map((f) => MapEntry(f.name, f.value)),
+                ),
+              )),
       };
 
-  factory Customer.fromJson(Map<String, dynamic> j) => Customer(
-        id: j['id'],
-        name: j['name'],
-        phone: j['phone'],
-        address: j['address'],
-        createdAt: DateTime.parse(j['createdAt']),
-      );
+  factory Customer.fromJson(Map<String, dynamic> j) {
+    Map<String, List<MeasurementField>> measurementsMap = {};
+    
+    // Fallback for older local data format
+    if (j['measurements'] != null && j['measurements'] is Map) {
+      final raw = j['measurements'] as Map;
+      raw.forEach((catId, fields) {
+        if (fields is Map) {
+          final fieldList = fields.entries
+              .map((e) => MeasurementField(
+                    name: e.key.toString(),
+                    value: e.value?.toString(),
+                  ))
+              .toList();
+          measurementsMap[catId.toString()] = fieldList;
+        }
+      });
+    }
+
+    // New format
+    if (j['indivvidualmeasurement'] != null && j['indivvidualmeasurement'] is Map) {
+      final raw = j['indivvidualmeasurement'] as Map;
+      raw.forEach((catName, fields) {
+        if (fields is Map) {
+          final fieldList = fields.entries
+              .map((e) => MeasurementField(
+                    name: e.key.toString(),
+                    value: e.value?.toString(),
+                  ))
+              .toList();
+          measurementsMap[catName.toString()] = fieldList;
+        }
+      });
+    }
+    return Customer(
+      id: j['id'],
+      customerId: j['customerId'],
+      name: j['name'],
+      phone: j['phone'],
+      createdAt: DateTime.parse(j['createdAt']),
+      indivvidualmeasurement: measurementsMap,
+    );
+  }
 }
 
 class MeasurementField {
@@ -186,7 +236,7 @@ class Order {
   });
 
   double get totalAmount => items.fold(0, (sum, i) => sum + i.total);
-  double get pendingAmount => totalAmount - (advanceAmount ?? 0);
+  double get pendingAmount => isPaid ? 0.0 : totalAmount - (advanceAmount ?? 0);
 
   Map<String, dynamic> toJson() => {
         'id': id,

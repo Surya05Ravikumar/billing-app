@@ -37,6 +37,8 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   final _advanceCtrl = TextEditingController();
   bool _isPaid = false;
 
+  bool _isSaving = false;
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +64,12 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
     _customerNameCtrl.dispose();
     _customerPhoneCtrl.dispose();
     _advanceCtrl.dispose();
+    for (final form in _itemForms) {
+      form.qtyCtrl.dispose();
+      form.priceCtrl.dispose();
+      form.notesCtrl.dispose();
+      form.customNameCtrl.dispose();
+    }
     super.dispose();
   }
 
@@ -188,6 +196,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
   }
 
   Future<void> _saveOrder() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
 
     // Validate items
@@ -200,27 +209,34 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       }
     }
 
-    final store = context.read<AppStore>();
+    setState(() {
+      _isSaving = true;
+    });
 
-    // Save customer if new
+    try {
+      final store = context.read<AppStore>();
+
+      // Save customer if new
     Customer customer;
     if (_selectedCustomer != null) {
       customer = _selectedCustomer!;
     } else {
+      final nameVal = _customerNameCtrl.text.trim();
+      final phoneVal = _customerPhoneCtrl.text.trim();
       final existing = store.customers
-          .where((c) => c.phone == _customerPhoneCtrl.text.trim())
+          .where((c) => c.phone == phoneVal || c.name.toLowerCase() == nameVal.toLowerCase())
           .toList();
       if (existing.isNotEmpty) {
         customer = existing.first;
       } else {
-        customer = await store.addCustomer(
-          _customerNameCtrl.text.trim(),
-          _customerPhoneCtrl.text.trim(),
-        );
+        customer = await store.addCustomer(nameVal, phoneVal);
       }
     }
 
     final items = _itemForms.map((f) => f.toOrderItem()).toList();
+    final totalAmount = items.fold<double>(0, (sum, i) => sum + i.total);
+    final advance = double.tryParse(_advanceCtrl.text) ?? 0.0;
+    final isPaidValue = _isPaid || (advance >= totalAmount && totalAmount > 0);
 
     final order = Order(
       id: widget.existingOrder?.id ?? _uuid.v4(),
@@ -232,18 +248,25 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       deliveryDate: _deliveryDate,
       items: items,
       status: widget.existingOrder?.status ?? OrderStatus.pending,
-      isPaid: _isPaid,
-      advanceAmount: double.tryParse(_advanceCtrl.text),
+      isPaid: isPaidValue,
+      advanceAmount: advance,
     );
 
-    if (widget.existingOrder != null) {
-      await store.updateOrder(order);
-    } else {
-      await store.addOrder(order);
-    }
+      if (widget.existingOrder != null) {
+        await store.updateOrder(order);
+      } else {
+        await store.addOrder(order);
+      }
 
-    if (mounted) {
-      Navigator.pop(context, order);
+      if (mounted) {
+        Navigator.pop(context, order);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
@@ -258,8 +281,10 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
         title: Text(widget.existingOrder != null ? 'Edit Order' : 'New Order'),
         actions: [
           TextButton(
-            onPressed: _saveOrder,
-            child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+            onPressed: _isSaving ? null : _saveOrder,
+            child: _isSaving 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -358,7 +383,13 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
               selectedCustomerId: _selectedCustomer?.id,
               customerPhone: _customerPhoneCtrl.text,
               onRemove: _itemForms.length > 1
-                  ? () => setState(() => _itemForms.removeAt(index))
+                  ? () => setState(() {
+                      final removed = _itemForms.removeAt(index);
+                      removed.qtyCtrl.dispose();
+                      removed.priceCtrl.dispose();
+                      removed.notesCtrl.dispose();
+                      removed.customNameCtrl.dispose();
+                    })
                   : null,
               onChanged: () => setState(() {}),
             )),
@@ -401,7 +432,15 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
                     label: 'Advance Received (₹)',
                     controller: _advanceCtrl,
                     keyboardType: TextInputType.number,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (val) {
+                      final advance = double.tryParse(val) ?? 0.0;
+                      if (advance >= totalAmount && totalAmount > 0) {
+                        _isPaid = true;
+                      } else {
+                        _isPaid = false;
+                      }
+                      setState(() {});
+                    },
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -420,9 +459,11 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
             const SizedBox(height: 24),
 
             ElevatedButton(
-              onPressed: _saveOrder,
+              onPressed: _isSaving ? null : _saveOrder,
               style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-              child: Text(widget.existingOrder != null ? 'Update Order' : 'Save Order'),
+              child: _isSaving
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : Text(widget.existingOrder != null ? 'Update Order' : 'Save Order'),
             ),
             const SizedBox(height: 24),
           ],
@@ -510,17 +551,41 @@ class _ItemFormCardState extends State<_ItemFormCard> {
       final custId = widget.selectedCustomerId;
       final phone = widget.customerPhone.trim();
 
-      final customerOrders = store.orders.where((o) =>
-          (custId != null && o.customerId == custId) ||
-          (phone.isNotEmpty && o.customerPhone == phone)).toList();
+      // 1. First: check the customer profile's synced measurements map (from MongoDB)
+      if (custId != null) {
+        final customerProfile = store.customers.firstWhere(
+          (c) => c.id == custId,
+          orElse: () => Customer(id: '', name: '', phone: '', createdAt: DateTime.now()),
+        );
+        if (customerProfile.id.isNotEmpty) {
+          if (customerProfile.indivvidualmeasurement.containsKey(cat.name.toLowerCase())) {
+            final syncedMeasurements = customerProfile.indivvidualmeasurement[cat.name.toLowerCase()]!;
+            if (syncedMeasurements.isNotEmpty) {
+              previousMeasurements = syncedMeasurements;
+            }
+          } else if (customerProfile.indivvidualmeasurement.containsKey(cat.id)) {
+            final syncedMeasurements = customerProfile.indivvidualmeasurement[cat.id]!;
+            if (syncedMeasurements.isNotEmpty) {
+              previousMeasurements = syncedMeasurements;
+            }
+          }
+        }
+      }
 
-      if (customerOrders.isNotEmpty) {
-        customerOrders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
-        for (final order in customerOrders) {
-          final matchingItems = order.items.where((item) => item.categoryId == cat.id).toList();
-          if (matchingItems.isNotEmpty) {
-            previousMeasurements = matchingItems.first.measurements;
-            break;
+      // 2. Fallback: search past orders for this customer's measurements for this category
+      if (previousMeasurements == null) {
+        final customerOrders = store.orders.where((o) =>
+            (custId != null && o.customerId == custId) ||
+            (phone.isNotEmpty && o.customerPhone == phone)).toList();
+
+        if (customerOrders.isNotEmpty) {
+          customerOrders.sort((a, b) => b.orderDate.compareTo(a.orderDate));
+          for (final order in customerOrders) {
+            final matchingItems = order.items.where((item) => item.categoryId == cat.id).toList();
+            if (matchingItems.isNotEmpty) {
+              previousMeasurements = matchingItems.first.measurements;
+              break;
+            }
           }
         }
       }
@@ -530,7 +595,7 @@ class _ItemFormCardState extends State<_ItemFormCard> {
             .map((m) => MeasurementField(name: m.name, value: m.value))
             .toList();
 
-        // Merge any new fields defined in the template that weren't in the previous order
+        // Merge any new fields defined in the template that weren't in the previous measurements
         for (final fieldName in cat.measurementFields) {
           if (!widget.form.measurements.any((m) => m.name.toLowerCase() == fieldName.toLowerCase())) {
             widget.form.measurements.add(MeasurementField(name: fieldName));
