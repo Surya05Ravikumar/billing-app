@@ -81,11 +81,12 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                             crossAxisAlignment: pw.CrossAxisAlignment.start,
                             children: [
                               pw.Text(
-                                'BHUVANA TAILORS',
+                                'BHUVANA DESIGNERS',
                                 style: pw.TextStyle(
                                   fontSize: 32,
                                   color: PdfColor.fromHex('#D4AF37'),
                                   fontWeight: pw.FontWeight.bold,
+                                  font: pw.Font.timesBold(),
                                 ),
                               ),
                               pw.SizedBox(height: 10),
@@ -94,6 +95,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                 style: pw.TextStyle(
                                   fontSize: 14,
                                   color: PdfColor.fromHex('#D4AF37'),
+                                  font: pw.Font.times(),
                                 ),
                               ),
                               pw.Text(
@@ -101,6 +103,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                 style: pw.TextStyle(
                                   fontSize: 14,
                                   color: PdfColor.fromHex('#D4AF37'),
+                                  font: pw.Font.times(),
                                 ),
                               ),
                             ],
@@ -222,8 +225,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                             style: pw.TextStyle(
                               fontSize: 32,
                               color: PdfColor.fromHex('#D4AF37'),
-                              fontStyle: pw.FontStyle.italic,
-                              fontWeight: pw.FontWeight.bold,
+                              font: pw.Font.timesBoldItalic(),
                             ),
                           ),
                           pw.SizedBox(height: 10),
@@ -232,6 +234,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                             style: pw.TextStyle(
                               fontSize: 16,
                               color: PdfColor.fromHex('#D4AF37'),
+                              font: pw.Font.times(),
                             ),
                           ),
                         ],
@@ -295,7 +298,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
 
     final buffer = StringBuffer();
     buffer.writeln('----------------------------------------');
-    buffer.writeln('          BHUVANA TAILORING             ');
+    buffer.writeln('          BHUVANA DESIGNERS             ');
     buffer.writeln('----------------------------------------');
     buffer.writeln('Invoice No: #$invoiceNum');
     buffer.writeln('----------------------------------------');
@@ -325,7 +328,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
       }
       buffer.writeln('----------------------------------------');
     }
-    buffer.writeln('Thank you for choosing Bhuvana Tailoring!');
+    buffer.writeln('Thank you for choosing Bhuvana Designers!');
     buffer.writeln('----------------------------------------');
 
     Share.share(buffer.toString(), subject: 'Invoice #$invoiceNum');
@@ -397,7 +400,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'BHUVANA TAILORS',
+                                    'BHUVANA DESIGNERS',
                                     style: TextStyle(
                                       fontFamily: 'serif',
                                       fontSize: 24,
@@ -409,6 +412,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                   Text(
                                     'LKC Nagar, 2nd Street, old municipality office opposite',
                                     style: TextStyle(
+                                      fontFamily: 'serif',
                                       fontSize: 10,
                                       color: Color(0xFFD4AF37),
                                     ),
@@ -416,6 +420,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                   Text(
                                     'vellakovil - 638111.',
                                     style: TextStyle(
+                                      fontFamily: 'serif',
                                       fontSize: 10,
                                       color: Color(0xFFD4AF37),
                                     ),
@@ -567,23 +572,24 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                           child: Column(
                             children: [
                               Text(
-                                'Thank you!',
-                                style: TextStyle(
-                                  fontFamily: 'serif',
-                                  fontStyle: FontStyle.italic,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFD4AF37),
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'Stitched with love and care',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Color(0xFFD4AF37),
-                                ),
-                              ),
+                                    'Thank you!',
+                                    style: TextStyle(
+                                      fontFamily: 'serif',
+                                      fontStyle: FontStyle.italic,
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFD4AF37),
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Stitched with love and care',
+                                    style: TextStyle(
+                                      fontFamily: 'serif',
+                                      fontSize: 14,
+                                      color: Color(0xFFD4AF37),
+                                    ),
+                                  ),
                             ],
                           ),
                         ),

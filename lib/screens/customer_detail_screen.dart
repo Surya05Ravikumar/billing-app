@@ -653,7 +653,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           ),
                           const SizedBox(height: 8),
                           const Center(
-                            child: Text('— Bhuvana Tailoring —', style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontStyle: FontStyle.italic)),
+                            child: Text('— Bhuvana Designers —', style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontStyle: FontStyle.italic)),
                           ),
                           const SizedBox(height: 4),
                         ],
@@ -696,7 +696,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                       buffer.writeln('--------------------------------');
                       buffer.writeln('💰 *Total Outstanding Balance: ₹${fmt.format(totalDue)}*');
                       buffer.writeln('');
-                      buffer.writeln('Thank you for choosing *Bhuvana Tailoring*!');
+                      buffer.writeln('Thank you for choosing *Bhuvana Designers*!');
                       Share.share(buffer.toString());
                     },
                   ),

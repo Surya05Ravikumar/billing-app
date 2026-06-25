@@ -109,7 +109,7 @@ class _DashboardTab extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Text(
-                  'Bhuvana Tailoring',
+                  'Bhuvana Designers',
                   style: TextStyle(
                     color: AppTheme.textDark,
                     fontSize: 18,

@@ -146,7 +146,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Bhuvana Tailoring',
+                  'Bhuvana Designers',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,

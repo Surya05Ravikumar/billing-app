@@ -24,7 +24,7 @@ class TailorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Bhuvana Tailoring',
+      title: 'Bhuvana Designers',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
       home: const HomeScreen(),
