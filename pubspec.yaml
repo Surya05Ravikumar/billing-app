@@ -20,6 +20,8 @@ dependencies:
   flutter_native_contact_picker: ^0.0.7
   http: ^1.2.2
   url_launcher: ^6.2.5
+  pdf: ^3.11.3
+  printing: ^5.12.0
 
 dev_dependencies:
   flutter_test:

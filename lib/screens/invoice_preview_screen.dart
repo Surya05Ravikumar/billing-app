@@ -1,15 +1,13 @@
-// lib/screens/invoice_preview_screen.dart
-
 import 'dart:io';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import '../models/models.dart';
 import '../utils/app_store.dart';
 import '../utils/theme.dart';
@@ -26,7 +24,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
   final GlobalKey _boundaryKey = GlobalKey();
   bool _isSharing = false;
 
-  Future<void> _shareAsImage() async {
+  Future<void> _shareAsPdf() async {
     setState(() => _isSharing = true);
 
     try {
@@ -43,35 +41,237 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
       }
       final shareText = buffer.toString().trim();
 
-      // 1. Capture the repaint boundary as a high-resolution image
-      final RenderRepaintBoundary boundary =
-          _boundaryKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      
-      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      
-      if (byteData == null) throw Exception('Failed to generate image bytes.');
-      
-      final Uint8List pngBytes = byteData.buffer.asUint8List();
+      final pdf = pw.Document();
+      final ByteData logoData = await rootBundle.load('assets/images/logo.png');
+      final Uint8List logoBytes = logoData.buffer.asUint8List();
+      final logoImage = pw.MemoryImage(logoBytes);
 
-      // 2. Write to a temporary file
+      final order = widget.order;
+      final fmt = NumberFormat('#,##0.00', 'en_IN');
+      final invoiceNum = order.invoiceNo ?? '1001';
+      final date = DateFormat('dd/MM/yyyy').format(order.orderDate);
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Stack(
+              children: [
+                // Watermark
+                pw.Positioned.fill(
+                  child: pw.Center(
+                    child: pw.Opacity(
+                      opacity: 0.15,
+                      child: pw.Image(logoImage, width: 350, height: 350),
+                    ),
+                  ),
+                ),
+                
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.center,
+                      children: [
+                        pw.Image(logoImage, width: 100, height: 100),
+                        pw.SizedBox(width: 20),
+                        pw.Expanded(
+                          child: pw.Column(
+                            crossAxisAlignment: pw.CrossAxisAlignment.start,
+                            children: [
+                              pw.Text(
+                                'BHUVANA TAILORS',
+                                style: pw.TextStyle(
+                                  fontSize: 32,
+                                  color: PdfColor.fromHex('#D4AF37'),
+                                  fontWeight: pw.FontWeight.bold,
+                                ),
+                              ),
+                              pw.SizedBox(height: 10),
+                              pw.Text(
+                                'LKC Nagar, 2nd Street, old municipality office opposite',
+                                style: pw.TextStyle(
+                                  fontSize: 14,
+                                  color: PdfColor.fromHex('#D4AF37'),
+                                ),
+                              ),
+                              pw.Text(
+                                'vellakovil - 638111.',
+                                style: pw.TextStyle(
+                                  fontSize: 14,
+                                  color: PdfColor.fromHex('#D4AF37'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 40),
+                    
+                    // Billing Info
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('BILLED TO :', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                            pw.SizedBox(height: 8),
+                            pw.Text(order.customerName, style: const pw.TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('INVOICE ID :', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                            pw.SizedBox(height: 8),
+                            pw.Text('#$invoiceNum', style: const pw.TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('INVOICE DATE :', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                            pw.SizedBox(height: 8),
+                            pw.Text(date, style: const pw.TextStyle(fontSize: 12)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    pw.SizedBox(height: 40),
+                    
+                    // Table Header & Items
+                    pw.Table(
+                      border: pw.TableBorder(
+                        top: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
+                        left: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
+                        right: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
+                        bottom: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
+                        verticalInside: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
+                      ),
+                      columnWidths: {
+                        0: const pw.FlexColumnWidth(1),
+                        1: const pw.FlexColumnWidth(4),
+                        2: const pw.FlexColumnWidth(1.2),
+                        3: const pw.FlexColumnWidth(2),
+                        4: const pw.FlexColumnWidth(2),
+                      },
+                      children: [
+                        // Header Row
+                        pw.TableRow(
+                          decoration: pw.BoxDecoration(color: PdfColor.fromHex('#FFF9C4')), // Light yellow/gold
+                          children: [
+                            pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('NO', style: pw.TextStyle(color: PdfColor.fromHex('#D4AF37'), fontWeight: pw.FontWeight.bold, fontSize: 10))),
+                            pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('DESCRIPTION', style: pw.TextStyle(color: PdfColor.fromHex('#D4AF37'), fontWeight: pw.FontWeight.bold, fontSize: 10))),
+                            pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('QTY', textAlign: pw.TextAlign.center, style: pw.TextStyle(color: PdfColor.fromHex('#D4AF37'), fontWeight: pw.FontWeight.bold, fontSize: 10))),
+                            pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('PRICE', textAlign: pw.TextAlign.center, style: pw.TextStyle(color: PdfColor.fromHex('#D4AF37'), fontWeight: pw.FontWeight.bold, fontSize: 10))),
+                            pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('SUBTOTAL', textAlign: pw.TextAlign.right, style: pw.TextStyle(color: PdfColor.fromHex('#D4AF37'), fontWeight: pw.FontWeight.bold, fontSize: 10))),
+                          ],
+                        ),
+                        // Items
+                        ...List.generate(order.items.length, (index) {
+                          final item = order.items[index];
+                          return pw.TableRow(
+                            verticalAlignment: pw.TableCellVerticalAlignment.middle,
+                            children: [
+                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('${index + 1}', style: const pw.TextStyle(fontSize: 12))),
+                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text(item.customName ?? item.categoryName, maxLines: 2, style: const pw.TextStyle(fontSize: 12))),
+                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('${item.quantity}', textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 12))),
+                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('₹ ${fmt.format(item.price)}', textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 12))),
+                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('₹ ${fmt.format(item.total)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 12))),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+                    
+                    // Grand Total Row
+                    pw.Container(
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border(
+                          left: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
+                          right: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
+                          bottom: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
+                        ),
+                      ),
+                      padding: const pw.EdgeInsets.all(12),
+                      child: pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.end,
+                        children: [
+                          pw.Text('GRAND TOTAL', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, letterSpacing: 1.2)),
+                          pw.SizedBox(width: 30),
+                          pw.Container(
+                            width: 100, // Approximate width of SUBTOTAL column to align text
+                            alignment: pw.Alignment.centerRight,
+                            child: pw.Text('₹ ${fmt.format(order.totalAmount)}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    
+                    pw.Spacer(),
+                    
+                    // Footer
+                    pw.Center(
+                      child: pw.Column(
+                        children: [
+                          pw.Text(
+                            'Thank you!',
+                            style: pw.TextStyle(
+                              fontSize: 32,
+                              color: PdfColor.fromHex('#D4AF37'),
+                              fontStyle: pw.FontStyle.italic,
+                              fontWeight: pw.FontWeight.bold,
+                            ),
+                          ),
+                          pw.SizedBox(height: 10),
+                          pw.Text(
+                            'Stitched with love and care',
+                            style: pw.TextStyle(
+                              fontSize: 16,
+                              color: PdfColor.fromHex('#D4AF37'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    pw.SizedBox(height: 40),
+                    
+                    // Social Handles
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.center,
+                      children: [
+                        // We could add images for icons, but since we may not have them we can just write it or leave placeholder text.
+                        pw.Text('Instagram: @bhuvana_designers_vellakovil', style: const pw.TextStyle(fontSize: 12)),
+                        pw.SizedBox(width: 20),
+                        pw.Text('WhatsApp: 9994979201', style: const pw.TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    pw.SizedBox(height: 20),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
       final tempDir = await getTemporaryDirectory();
-      final invoiceNum = widget.order.invoiceNo ?? '1001';
-      final filePath = '${tempDir.path}/invoice_$invoiceNum.png';
-      
+      final filePath = '${tempDir.path}/invoice_$invoiceNum.pdf';
       final file = File(filePath);
-      await file.writeAsBytes(pngBytes);
+      await file.writeAsBytes(await pdf.save());
 
-      // 3. Share the file via WhatsApp / native OS sheet
       await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'image/png')],
+        [XFile(file.path, mimeType: 'application/pdf')],
         text: shareText.isNotEmpty ? shareText : null,
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to share image: $e'),
+            content: Text('Failed to share PDF: $e'),
             backgroundColor: AppTheme.accent,
           ),
         );
@@ -141,6 +341,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
     final totalPaid = order.isPaid ? order.totalAmount : (order.advanceAmount ?? 0.0);
     final balanceDue = order.isPaid ? 0.0 : order.pendingAmount;
 
+
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
@@ -182,37 +383,41 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                       children: [
                         // Shop Header
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Image.asset(
                               'assets/images/logo.png',
-                              height: 48,
-                              width: 48,
+                              height: 60,
+                              width: 60,
                               fit: BoxFit.contain,
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 16),
                             const Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'BHUVANA TAILORING',
+                                    'BHUVANA TAILORS',
                                     style: TextStyle(
                                       fontFamily: 'serif',
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppTheme.textDark,
-                                      letterSpacing: 0.6,
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFFD4AF37),
                                     ),
                                   ),
-                                  SizedBox(height: 2),
+                                  SizedBox(height: 4),
                                   Text(
-                                    'Professional Blouse & Ladies Dress Stitching Studio',
+                                    'LKC Nagar, 2nd Street, old municipality office opposite',
                                     style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w500,
-                                      color: AppTheme.textMid,
-                                      letterSpacing: 0.1,
+                                      fontSize: 10,
+                                      color: Color(0xFFD4AF37),
+                                    ),
+                                  ),
+                                  Text(
+                                    'vellakovil - 638111.',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Color(0xFFD4AF37),
                                     ),
                                   ),
                                 ],
@@ -220,321 +425,183 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        _buildDashedLine(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
 
-                        // Bill Metadata (Strictly Invoice No, Customer, and Phone)
+                        // Bill Metadata
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('INVOICE NO',
-                                    style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontWeight: FontWeight.bold)),
-                                Text('#$invoiceNum',
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textDark)),
+                                const Text('BILLED TO :',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                Text(order.customerName,
+                                    style: const TextStyle(fontSize: 12)),
                               ],
                             ),
                             Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('CUSTOMER NAME',
-                                    style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontWeight: FontWeight.bold)),
-                                Text(order.customerName,
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textDark)),
+                                const Text('INVOICE ID :',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                Text('#$invoiceNum',
+                                    style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('INVOICE DATE :',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                Text(DateFormat('dd/MM/yyyy').format(order.orderDate),
+                                    style: const TextStyle(fontSize: 12)),
                               ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-                        const Text('CONTACT PHONE',
-                            style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontWeight: FontWeight.bold)),
-                        Text(order.customerPhone,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textDark)),
                         
-                        const SizedBox(height: 20),
-                        _buildDashedLine(),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 24),
 
-                        // Item Table Header
-                        const Row(
+                        // Table
+                        Stack(
                           children: [
-                            Expanded(
-                              flex: 3,
-                              child: Text('GARMENT ITEM',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textMid)),
+                            Positioned.fill(
+                              child: Center(
+                                child: Opacity(
+                                  opacity: 0.15,
+                                  child: Image.asset(
+                                    'assets/images/logo.png',
+                                    width: 250,
+                                    height: 250,
+                                  ),
+                                ),
+                              ),
                             ),
-                            Expanded(
-                              flex: 1,
-                              child: Text('QTY',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textMid)),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text('PRICE',
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textMid)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        const Divider(height: 1),
-                        const SizedBox(height: 8),
-
-                        // Items list (Strictly no individual measurements)
-                        ...order.items.map((item) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                            Column(
+                              children: [
+                                Container(
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: const Color(0xFFD4AF37), width: 1),
+                                  ),
+                                  child: Column(
                                     children: [
-                                      Expanded(
-                                        flex: 3,
-                                        child: Text(
-                                          item.customName ?? item.categoryName,
-                                          style: const TextStyle(
-                                              fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textDark),
+                                      // Header
+                                      Container(
+                                        color: const Color(0xFFFFF9C4),
+                                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                        child: const Row(
+                                          children: [
+                                            Expanded(flex: 1, child: Text('NO', style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 10))),
+                                            Expanded(flex: 4, child: Text('DESCRIPTION', style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 10))),
+                                            Expanded(flex: 1, child: Text('QTY', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 10))),
+                                            Expanded(flex: 2, child: Text('PRICE', textAlign: TextAlign.center, style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 10))),
+                                            Expanded(flex: 2, child: Text('SUBTOTAL', textAlign: TextAlign.right, style: TextStyle(color: Color(0xFFD4AF37), fontWeight: FontWeight.bold, fontSize: 10))),
+                                          ],
                                         ),
                                       ),
-                                      Expanded(
-                                        flex: 1,
-                                        child: Text(
-                                          '${item.quantity}',
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(fontSize: 15, color: AppTheme.textDark),
-                                        ),
-                                      ),
-                                      Expanded(
-                                        flex: 2,
-                                        child: Text(
-                                          '₹${fmt.format(item.price)}',
-                                          textAlign: TextAlign.right,
-                                          style: const TextStyle(
-                                              fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textDark),
-                                        ),
+                                      const Divider(color: Color(0xFFD4AF37), height: 1, thickness: 1),
+                                      
+                                      // Items
+                                      ...List.generate(order.items.length, (index) {
+                                        final item = order.items[index];
+                                        return Container(
+                                          decoration: BoxDecoration(
+                                            border: Border(
+                                              bottom: BorderSide(
+                                                color: index == order.items.length - 1 ? Colors.transparent : const Color(0xFFD4AF37).withOpacity(0.3),
+                                              ),
+                                            ),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Expanded(flex: 1, child: Text('${index + 1}', style: const TextStyle(fontSize: 12))),
+                                              Expanded(flex: 4, child: Text(item.customName ?? item.categoryName, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+                                              Expanded(flex: 1, child: Text('${item.quantity}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))),
+                                              Expanded(flex: 2, child: Text('₹ ${fmt.format(item.price)}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))),
+                                              Expanded(flex: 2, child: Text('₹ ${fmt.format(item.total)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  ),
+                                ),
+                                // Grand Total
+                                Container(
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      left: BorderSide(color: Color(0xFFD4AF37)),
+                                      right: BorderSide(color: Color(0xFFD4AF37)),
+                                      bottom: BorderSide(color: Color(0xFFD4AF37)),
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      const Text('GRAND TOTAL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                      const SizedBox(width: 20),
+                                      Container(
+                                        width: 80,
+                                        alignment: Alignment.centerRight,
+                                        child: Text('₹ ${fmt.format(order.totalAmount)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
-                            )),
-
-                        const SizedBox(height: 12),
-                        _buildDashedLine(),
-                        const SizedBox(height: 16),
-
-                        // Payment Summary block (Total, Paid, and Balance)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Total Amount:',
-                                style: TextStyle(fontSize: 15, color: AppTheme.textMid, fontWeight: FontWeight.w500)),
-                            Text('₹${fmt.format(order.totalAmount)}',
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.textDark)),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Total Paid:',
-                                style: TextStyle(fontSize: 15, color: AppTheme.success, fontWeight: FontWeight.w500)),
-                            Text('₹${fmt.format(totalPaid)}',
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.success)),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Balance Due:',
-                                style: TextStyle(fontSize: 15, color: AppTheme.accent, fontWeight: FontWeight.w700)),
-                            Text('₹${fmt.format(balanceDue)}',
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppTheme.accent)),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDashedLine(),
-                        const SizedBox(height: 16),
                         
-                        // Payment Info (Interactive Clickable)
-                        if (store.gpayLink.isNotEmpty || store.gpayNumber.isNotEmpty) ...[
-                          const Text(
-                            'PAYMENT METHOD',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.textLight,
-                              letterSpacing: 0.8,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          if (store.gpayLink.isNotEmpty)
-                            InkWell(
-                              onTap: () async {
-                                final link = store.gpayLink.trim();
-                                if (link.isNotEmpty) {
-                                  final messenger = ScaffoldMessenger.of(context);
-                                  String finalUriStr = link;
-                                  
-                                  if (link.contains('@') && !link.startsWith('upi://')) {
-                                    finalUriStr = 'upi://pay?pa=$link&pn=Bhuvana%20Tailoring&tn=Invoice%20$invoiceNum&am=${balanceDue.toStringAsFixed(2)}&cu=INR';
-                                  } else if (link.startsWith('upi://')) {
-                                    // Append amount if not present
-                                    if (!link.contains('&am=')) {
-                                      finalUriStr = '$link&am=${balanceDue.toStringAsFixed(2)}';
-                                    }
-                                  }
-                                  
-                                  final uri = Uri.tryParse(finalUriStr);
-                                  if (uri != null) {
-                                    try {
-                                      final launched = await launchUrl(
-                                        uri,
-                                        mode: LaunchMode.externalApplication,
-                                      );
-                                      if (!launched) {
-                                        messenger.showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Could not launch GPay. Use GPay number below.'),
-                                            backgroundColor: AppTheme.accent,
-                                          ),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      messenger.showSnackBar(
-                                        SnackBar(
-                                          content: Text('Error: $e. GPay number is provided below.'),
-                                          backgroundColor: AppTheme.accent,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.green.withOpacity(0.2)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.payment, size: 18, color: Colors.green),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'Pay Now via GPay / UPI',
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.green,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 1),
-                                          Text(
-                                            store.gpayLink.contains('pa=')
-                                                ? Uri.parse(store.gpayLink).queryParameters['pa'] ?? 'Tap to redirect'
-                                                : 'Tap to pay directly',
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              color: AppTheme.textMid,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(Icons.arrow_forward_ios, size: 12, color: Colors.green),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          if (store.gpayLink.isNotEmpty && store.gpayNumber.isNotEmpty)
-                            const SizedBox(height: 8),
-                          if (store.gpayNumber.isNotEmpty)
-                            InkWell(
-                              onTap: () {
-                                Clipboard.setData(ClipboardData(text: store.gpayNumber));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Google Pay number copied to clipboard!'),
-                                    backgroundColor: Colors.green,
-                                  ),
-                                );
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primary.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: AppTheme.primary.withOpacity(0.15)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.phone_android, size: 18, color: AppTheme.primary),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            'Google Pay Phone Number',
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.bold,
-                                              color: AppTheme.primary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 1),
-                                          Text(
-                                            store.gpayNumber,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppTheme.textDark,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(Icons.copy, size: 14, color: AppTheme.primary),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          const SizedBox(height: 16),
-                          _buildDashedLine(),
-                          const SizedBox(height: 16),
-                        ],
-
-                        // Center Shop Thank You Footer (Disclaimer text removed)
+                        const SizedBox(height: 30),
+                        
+                        // Footer
                         const Center(
                           child: Column(
                             children: [
                               Text(
-                                'Thank you for choosing Bhuvana Tailoring!',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textDark),
+                                'Thank you!',
+                                style: TextStyle(
+                                  fontFamily: 'serif',
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFD4AF37),
+                                ),
                               ),
-                              SizedBox(height: 2),
+                              SizedBox(height: 8),
                               Text(
-                                'Stitched with love & care.',
-                                style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontStyle: FontStyle.italic),
+                                'Stitched with love and care',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Color(0xFFD4AF37),
+                                ),
                               ),
                             ],
                           ),
+                        ),
+                        
+                        const SizedBox(height: 30),
+                        
+                        // Social Handles
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.camera_alt_outlined, size: 14, color: Colors.purple),
+                            SizedBox(width: 4),
+                            Text('bhuvana_designers_vellakovil', style: TextStyle(fontSize: 10)),
+                            SizedBox(width: 16),
+                            Icon(Icons.message, size: 14, color: Colors.green),
+                            SizedBox(width: 4),
+                            Text('9994979201', style: TextStyle(fontSize: 10)),
+                          ],
                         ),
                       ],
                     ),
@@ -575,11 +642,11 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: _isSharing ? null : _shareAsImage,
+                    onPressed: _isSharing ? null : _shareAsPdf,
                     icon: _isSharing 
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Icon(Icons.share, size: 18),
-                    label: const Text('WhatsApp (Image)'),
+                        : const Icon(Icons.picture_as_pdf, size: 18),
+                    label: const Text('WhatsApp (PDF)'),
                   ),
                 ),
               ],
