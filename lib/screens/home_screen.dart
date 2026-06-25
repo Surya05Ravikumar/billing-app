@@ -178,7 +178,7 @@ class _DashboardTab extends StatelessWidget {
               const SectionLabel('REMINDERS DUE'),
               const SizedBox(height: 12),
               SizedBox(
-                height: 95,
+                height: 115,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
                   itemCount: store.pendingReminderOrders.length,
@@ -299,10 +299,20 @@ class _DashboardTab extends StatelessWidget {
                   action: ElevatedButton.icon(
                     icon: const Icon(Icons.add, size: 18),
                     label: const Text('New Order'),
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
-                    ),
+                    onPressed: () async {
+                      final order = await Navigator.push<Order?>(
+                        context,
+                        MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
+                      );
+                      if (order != null && !order.isPaid && context.mounted) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => InvoicePreviewScreen(order: order, autoShare: true),
+                          ),
+                        );
+                      }
+                    },
                   ),
                 );
               } else {
@@ -320,10 +330,20 @@ class _DashboardTab extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
-        ),
+        onPressed: () async {
+          final order = await Navigator.push<Order?>(
+            context,
+            MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
+          );
+          if (order != null && !order.isPaid && context.mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => InvoicePreviewScreen(order: order, autoShare: true),
+              ),
+            );
+          }
+        },
         backgroundColor: AppTheme.accent,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(

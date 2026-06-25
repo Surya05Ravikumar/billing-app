@@ -5,7 +5,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import '../models/models.dart';
@@ -282,7 +281,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
 
       bool directShared = false;
       if (Platform.isAndroid) {
-        final channel = const MethodChannel('com.example.billing_app/whatsapp_share');
+        const channel = MethodChannel('com.example.billing_app/whatsapp_share');
         try {
           await channel.invokeMethod('shareToWhatsApp', {
             'phone': order.customerPhone,
@@ -368,13 +367,9 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final store = context.watch<AppStore>();
     final order = widget.order;
     final fmt = NumberFormat('#,##0.00', 'en_IN');
     final invoiceNum = order.invoiceNo ?? '1001';
-
-    final totalPaid = order.isPaid ? order.totalAmount : (order.advanceAmount ?? 0.0);
-    final balanceDue = order.isPaid ? 0.0 : order.pendingAmount;
 
 
     return Scaffold(
@@ -692,30 +687,6 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildDashedLine() {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final boxWidth = constraints.constrainWidth();
-        const dashWidth = 5.0;
-        const dashHeight = 1.0;
-        final dashCount = (boxWidth / (2 * dashWidth)).floor();
-        return Flex(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          direction: Axis.horizontal,
-          children: List.generate(dashCount, (_) {
-            return const SizedBox(
-              width: dashWidth,
-              height: dashHeight,
-              child: DecoratedBox(
-                decoration: BoxDecoration(color: AppTheme.border),
-              ),
-            );
-          }),
-        );
-      },
     );
   }
 }

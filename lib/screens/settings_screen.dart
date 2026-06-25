@@ -453,11 +453,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(width: 16),
-          Expanded(
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Reminder Repeat Interval',
                   style: TextStyle(
                     fontSize: 15,
@@ -465,8 +465,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: AppTheme.textDark,
                   ),
                 ),
-                const SizedBox(height: 4),
-                const Text(
+                SizedBox(height: 4),
+                Text(
                   'Repeat unpaid bill sharing every N days (0 to disable)',
                   style: TextStyle(
                     fontSize: 11,

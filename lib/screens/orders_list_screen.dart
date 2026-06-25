@@ -40,10 +40,20 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
-            ),
+            onPressed: () async {
+              final order = await Navigator.push<Order?>(
+                context,
+                MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
+              );
+              if (order != null && !order.isPaid && context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => InvoicePreviewScreen(order: order, autoShare: true),
+                  ),
+                );
+              }
+            },
           ),
         ],
       ),
