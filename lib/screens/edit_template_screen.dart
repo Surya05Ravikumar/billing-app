@@ -49,7 +49,7 @@ class _EditTemplateScreenState extends State<EditTemplateScreen> {
   }
 
   void _removeField(int index) {
-    if (_fieldCtrls.length <= 1) return;
+    if (_fieldCtrls.isEmpty) return;
     setState(() {
       _fieldCtrls[index].dispose();
       _fieldCtrls.removeAt(index);
@@ -63,13 +63,6 @@ class _EditTemplateScreenState extends State<EditTemplateScreen> {
         .map((c) => c.text.trim())
         .where((f) => f.isNotEmpty)
         .toList();
-
-    if (fields.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one measurement field')),
-      );
-      return;
-    }
 
     final double? basePrice = double.tryParse(_priceCtrl.text.trim());
 

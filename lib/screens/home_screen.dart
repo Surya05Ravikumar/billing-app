@@ -11,6 +11,7 @@ import 'create_order_screen.dart';
 import 'orders_list_screen.dart';
 import 'customers_screen.dart';
 import 'settings_screen.dart';
+import 'invoice_preview_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -172,6 +173,94 @@ class _DashboardTab extends StatelessWidget {
             ),
 
             const SizedBox(height: 24),
+
+            if (store.pendingReminderOrders.isNotEmpty) ...[
+              const SectionLabel('REMINDERS DUE'),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 95,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: store.pendingReminderOrders.length,
+                  itemBuilder: (context, index) {
+                    final order = store.pendingReminderOrders[index];
+                    final balance = order.pendingAmount;
+                    final daysElapsed = DateTime.now().difference(order.lastReminderSentAt ?? order.orderDate).inDays;
+                    
+                    return Container(
+                      width: 250,
+                      margin: const EdgeInsets.only(right: 12, bottom: 4),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.warning.withOpacity(0.4), width: 1.5),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppTheme.warning.withOpacity(0.03),
+                            blurRadius: 6,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  order.customerName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Inv #${order.invoiceNo ?? "1001"} · ₹${fmt.format(balance)} due',
+                                  style: const TextStyle(fontSize: 11, color: AppTheme.textMid),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  order.lastReminderSentAt != null 
+                                      ? 'Last sent: $daysElapsed days ago' 
+                                      : 'No reminder sent yet',
+                                  style: const TextStyle(fontSize: 10, color: AppTheme.warning, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => InvoicePreviewScreen(order: order, autoShare: true),
+                                ),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.warning,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Text(
+                              'Send',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
 
             // Filter upcoming due orders (delivery date between today and 1 week from now, and not delivered)
             SectionLabel(

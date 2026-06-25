@@ -34,6 +34,20 @@ class AppStore extends ChangeNotifier {
   String _syncStatus = '';
   String get syncStatus => _syncStatus;
 
+  int _reminderRepeatDays = 7;
+  int get reminderRepeatDays => _reminderRepeatDays;
+
+  List<Order> get pendingReminderOrders {
+    if (_reminderRepeatDays <= 0) return [];
+    final now = DateTime.now();
+    return _orders.where((o) {
+      if (o.isPaid) return false;
+      final baseDate = o.lastReminderSentAt ?? o.orderDate;
+      final diffDays = now.difference(baseDate).inDays;
+      return diffDays >= _reminderRepeatDays;
+    }).toList();
+  }
+
   // MongoDB configuration
   String _mongodbUrl = 'https://billing-app-tllw.onrender.com/api';
   String get mongodbUrl => _mongodbUrl;
@@ -81,6 +95,7 @@ class AppStore extends ChangeNotifier {
     _gpayNumber = prefs.getString('gpayNumber') ?? '';
     _sheetsUrl = prefs.getString('sheetsUrl') ?? '';
     _syncStatus = _sheetsUrl.isNotEmpty ? 'Sync pending (offline)' : '';
+    _reminderRepeatDays = prefs.getInt('reminderRepeatDays') ?? 7;
 
     _mongodbUrl = prefs.getString('mongodbUrl') ?? 'https://billing-app-tllw.onrender.com/api';
     // Remove the override that forces it back to render
@@ -162,8 +177,14 @@ class AppStore extends ChangeNotifier {
     // Auto-recovery: If local database is empty but a sheets URL is present, trigger cloud restore
     if (_orders.isEmpty && _sheetsUrl.isNotEmpty) {
       pullFromGoogleSheets();
-    } else if (_orders.isEmpty && _isMongodbEnabled) {
-      pullFromMongoDB();
+    }
+    
+    if (_isMongodbEnabled) {
+      _processSyncQueue().then((_) {
+        syncWithMongoDB().then((_) {
+          pullFromMongoDB();
+        });
+      });
     }
   }
 
@@ -274,6 +295,7 @@ class AppStore extends ChangeNotifier {
       }
     }
     notifyListeners();
+    syncAndPull();
   }
 
   /// Updates the local Customer object's measurements map from order items.
@@ -282,6 +304,7 @@ class AppStore extends ChangeNotifier {
     final custIdx = _customers.indexWhere((c) => c.id == order.customerId);
     if (custIdx == -1) return;
     final customer = _customers[custIdx];
+    bool hasNewMeasurements = false;
     for (final item in order.items) {
       if (item.measurements.isNotEmpty) {
         final filledMeasurements = item.measurements
@@ -291,8 +314,12 @@ class AppStore extends ChangeNotifier {
           customer.indivvidualmeasurement[item.categoryName.toLowerCase()] = filledMeasurements
               .map((m) => MeasurementField(name: m.name, value: m.value))
               .toList();
+          hasNewMeasurements = true;
         }
       }
+    }
+    if (hasNewMeasurements && _isMongodbEnabled) {
+      _apiPut('customers', customer.id, customer.toJson());
     }
     // No notifyListeners here — caller does it
   }
@@ -307,6 +334,7 @@ class AppStore extends ChangeNotifier {
         _apiPut('orders', order.id, order.toJson());
       }
       notifyListeners();
+      syncAndPull();
     }
   }
 
@@ -317,6 +345,7 @@ class AppStore extends ChangeNotifier {
       _apiDelete('orders', id);
     }
     notifyListeners();
+    syncAndPull();
   }
 
   // Customers
@@ -353,6 +382,7 @@ class AppStore extends ChangeNotifier {
       }
     }
     notifyListeners();
+    syncAndPull();
     return customer;
   }
 
@@ -365,6 +395,7 @@ class AppStore extends ChangeNotifier {
         _apiPut('customers', customer.id, customer.toJson());
       }
       notifyListeners();
+      syncAndPull();
     }
   }
 
@@ -375,6 +406,7 @@ class AppStore extends ChangeNotifier {
       _apiDelete('customers', id);
     }
     notifyListeners();
+    syncAndPull();
   }
 
   // Categories
@@ -391,6 +423,7 @@ class AppStore extends ChangeNotifier {
       _apiPost('categories', cat.toJson());
     }
     notifyListeners();
+    syncAndPull();
   }
 
   Future<void> updateCategory(GarmentCategory cat) async {
@@ -402,6 +435,7 @@ class AppStore extends ChangeNotifier {
         _apiPut('categories', cat.id, cat.toJson());
       }
       notifyListeners();
+      syncAndPull();
     }
   }
 
@@ -412,6 +446,7 @@ class AppStore extends ChangeNotifier {
       _apiDelete('categories', id);
     }
     notifyListeners();
+    syncAndPull();
   }
 
   String generateId() => _uuid.v4();
@@ -736,6 +771,33 @@ class AppStore extends ChangeNotifier {
         print('Backup import failed: $e');
       }
       return false;
+    }
+  }
+
+  Future<void> updateReminderRepeatDays(int days) async {
+    _reminderRepeatDays = days;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('reminderRepeatDays', _reminderRepeatDays);
+    notifyListeners();
+  }
+
+  Future<void> markReminderSent(String orderId) async {
+    final idx = _orders.indexWhere((o) => o.id == orderId);
+    if (idx != -1) {
+      _orders[idx].lastReminderSentAt = DateTime.now();
+      await _save();
+      if (_isMongodbEnabled) {
+        _apiPut('orders', orderId, _orders[idx].toJson());
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> syncAndPull() async {
+    if (_isMongodbEnabled) {
+      await _processSyncQueue();
+      await syncWithMongoDB();
+      await pullFromMongoDB();
     }
   }
 

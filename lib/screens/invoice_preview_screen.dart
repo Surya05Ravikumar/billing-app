@@ -14,7 +14,8 @@ import '../utils/theme.dart';
 
 class InvoicePreviewScreen extends StatefulWidget {
   final Order order;
-  const InvoicePreviewScreen({super.key, required this.order});
+  final bool autoShare;
+  const InvoicePreviewScreen({super.key, required this.order, this.autoShare = false});
 
   @override
   State<InvoicePreviewScreen> createState() => _InvoicePreviewScreenState();
@@ -23,6 +24,16 @@ class InvoicePreviewScreen extends StatefulWidget {
 class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
   final GlobalKey _boundaryKey = GlobalKey();
   bool _isSharing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoShare) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _shareAsPdf();
+      });
+    }
+  }
 
   Future<void> _shareAsPdf() async {
     setState(() => _isSharing = true);
@@ -45,6 +56,9 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
       final ByteData logoData = await rootBundle.load('assets/images/logo.png');
       final Uint8List logoBytes = logoData.buffer.asUint8List();
       final logoImage = pw.MemoryImage(logoBytes);
+
+      final ByteData fontData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+      final robotoFont = pw.Font.ttf(fontData);
 
       final order = widget.order;
       final fmt = NumberFormat('#,##0.00', 'en_IN');
@@ -182,8 +196,8 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                               pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('${index + 1}', style: const pw.TextStyle(fontSize: 12))),
                               pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text(item.customName ?? item.categoryName, maxLines: 2, style: const pw.TextStyle(fontSize: 12))),
                               pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('${item.quantity}', textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 12))),
-                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('₹ ${fmt.format(item.price)}', textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 12))),
-                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('₹ ${fmt.format(item.total)}', textAlign: pw.TextAlign.right, style: const pw.TextStyle(fontSize: 12))),
+                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('₹ ${fmt.format(item.price)}', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: 12, font: robotoFont))),
+                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('₹ ${fmt.format(item.total)}', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 12, font: robotoFont))),
                             ],
                           );
                         }),
@@ -208,7 +222,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                           pw.Container(
                             width: 100, // Approximate width of SUBTOTAL column to align text
                             alignment: pw.Alignment.centerRight,
-                            child: pw.Text('₹ ${fmt.format(order.totalAmount)}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                            child: pw.Text('₹ ${fmt.format(order.totalAmount)}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, font: robotoFont)),
                           ),
                         ],
                       ),
@@ -266,10 +280,28 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
       final file = File(filePath);
       await file.writeAsBytes(await pdf.save());
 
-      await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'application/pdf')],
-        text: shareText.isNotEmpty ? shareText : null,
-      );
+      bool directShared = false;
+      if (Platform.isAndroid) {
+        final channel = const MethodChannel('com.example.billing_app/whatsapp_share');
+        try {
+          await channel.invokeMethod('shareToWhatsApp', {
+            'phone': order.customerPhone,
+            'filePath': file.path,
+          });
+          directShared = true;
+        } catch (e) {
+          debugPrint('MethodChannel direct WhatsApp share failed: $e');
+        }
+      }
+
+      if (!directShared) {
+        await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'application/pdf')],
+          text: shareText.isNotEmpty ? shareText : null,
+        );
+      }
+      
+      await store.markReminderSent(order.id);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

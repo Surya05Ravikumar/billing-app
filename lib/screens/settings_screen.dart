@@ -101,6 +101,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              _buildReminderDaysCard(context),
               const SizedBox(height: 40),
               _buildFooter(),
             ],
@@ -421,6 +423,86 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildReminderDaysCard(BuildContext context) {
+    final store = Provider.of<AppStore>(context);
+    final controller = TextEditingController(text: store.reminderRepeatDays.toString());
+    
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.notifications_active_outlined,
+              color: AppTheme.accent,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Reminder Repeat Interval',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Repeat unpaid bill sharing every N days (0 to disable)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.textMid,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 60,
+            child: TextFormField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppTheme.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppTheme.accent, width: 1.5),
+                ),
+              ),
+              onChanged: (val) {
+                final days = int.tryParse(val) ?? 0;
+                store.updateReminderRepeatDays(days);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -220,6 +220,7 @@ class Order {
   OrderStatus status;
   bool isPaid;
   double? advanceAmount;
+  DateTime? lastReminderSentAt;
 
   Order({
     required this.id,
@@ -233,6 +234,7 @@ class Order {
     this.status = OrderStatus.pending,
     this.isPaid = false,
     this.advanceAmount,
+    this.lastReminderSentAt,
   });
 
   double get totalAmount => items.fold(0, (sum, i) => sum + i.total);
@@ -251,6 +253,7 @@ class Order {
         'isPaid': isPaid,
         'advanceAmount': advanceAmount,
         'totalAmount': totalAmount,
+        'lastReminderSentAt': lastReminderSentAt?.toIso8601String(),
       };
 
   factory Order.fromJson(Map<String, dynamic> j) => Order(
@@ -266,6 +269,9 @@ class Order {
         isPaid: j['isPaid'],
         advanceAmount: j['advanceAmount'] != null
             ? (j['advanceAmount'] as num).toDouble()
+            : null,
+        lastReminderSentAt: j['lastReminderSentAt'] != null
+            ? DateTime.parse(j['lastReminderSentAt'])
             : null,
       );
 }
