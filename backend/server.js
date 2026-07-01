@@ -113,6 +113,7 @@ const GarmentCategory = mongoose.model('GarmentCategory', GarmentCategorySchema,
 const OrderItemSchema = new mongoose.Schema({
   garmentCategoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'GarmentCategory', required: true },
   garmentName: { type: String, required: true },
+  customName: { type: String },
   quantity: { type: Number, required: true, default: 1 },
   unitPrice: { type: Number, required: true, default: 0 },
   amount: { type: Number, required: true, default: 0 },
@@ -256,6 +257,7 @@ async function saveOrUpdateOrderFromClient(clientOrder) {
     mappedItems.push({
       garmentCategoryId: categoryDoc._id,
       garmentName: item.categoryName || categoryDoc.name,
+      customName: item.customName || null,
       quantity: item.quantity || 1,
       unitPrice: item.price || categoryDoc.price || 0,
       amount: (item.quantity || 1) * (item.price || categoryDoc.price || 0),
@@ -363,7 +365,7 @@ async function transformOrderToClient(order) {
       quantity: item.quantity,
       price: item.unitPrice,
       notes: '',
-      customName: item.garmentName !== (cat ? cat.name : '') ? item.garmentName : null
+      customName: item.customName || (item.garmentName !== (cat ? cat.name : '') ? item.garmentName : null)
     };
   });
 

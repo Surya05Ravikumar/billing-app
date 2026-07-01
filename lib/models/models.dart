@@ -151,6 +151,8 @@ class OrderItem {
 
   double get total => price * quantity;
 
+  String get displayName => (customName != null && customName!.trim().isNotEmpty) ? customName!.trim() : categoryName;
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'categoryId': categoryId,

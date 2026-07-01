@@ -403,7 +403,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      o.items.map((i) => i.customName ?? i.categoryName).join(', '),
+                                      o.items.map((i) => i.displayName).join(', '),
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w700,
@@ -621,7 +621,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                                 Row(
                                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                   children: [
-                                                    Expanded(child: Text('${item.customName ?? item.categoryName} x ${item.quantity}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textDark))),
+                                                    Expanded(child: Text('${item.displayName} x ${item.quantity}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textDark))),
                                                     Text('₹${fmt.format(item.total)}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppTheme.textDark)),
                                                   ],
                                                 ),
@@ -688,7 +688,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                       for (final o in pendingOrders) {
                         buffer.writeln('🔹 *Bill ID: #${o.invoiceNo ?? "1001"}* (Due: ${DateFormat('dd MMM yyyy').format(o.deliveryDate)})');
                         for (final item in o.items) {
-                          buffer.writeln('  • ${item.customName ?? item.categoryName} x ${item.quantity} = ₹${fmt.format(item.total)}');
+                          buffer.writeln('  • ${item.displayName} x ${item.quantity} = ₹${fmt.format(item.total)}');
                         }
                         buffer.writeln('  *Pending amount:* ₹${fmt.format(o.pendingAmount)}');
                         buffer.writeln('');

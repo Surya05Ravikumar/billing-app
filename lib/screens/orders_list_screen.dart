@@ -635,7 +635,7 @@ class _ItemDetailCardState extends State<_ItemDetailCard> {
               ),
               child: const Icon(Icons.checkroom_outlined, size: 18, color: AppTheme.primary),
             ),
-            title: Text(item.customName ?? item.categoryName,
+            title: Text(item.displayName,
                 style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
             subtitle: Text(
                 'Qty: ${item.quantity} × ₹${fmt.format(item.price)}  =  ₹${fmt.format(item.total)}',

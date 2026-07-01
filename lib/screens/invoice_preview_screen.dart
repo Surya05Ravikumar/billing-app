@@ -193,7 +193,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                             verticalAlignment: pw.TableCellVerticalAlignment.middle,
                             children: [
                               pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('${index + 1}', style: const pw.TextStyle(fontSize: 12))),
-                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text(item.customName ?? item.categoryName, maxLines: 2, style: const pw.TextStyle(fontSize: 12))),
+                              pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text(item.displayName, maxLines: 2, style: const pw.TextStyle(fontSize: 12))),
                               pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('${item.quantity}', textAlign: pw.TextAlign.center, style: const pw.TextStyle(fontSize: 12))),
                               pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('₹ ${fmt.format(item.price)}', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: 12, font: robotoFont))),
                               pw.Padding(padding: const pw.EdgeInsets.all(12), child: pw.Text('₹ ${fmt.format(item.total)}', textAlign: pw.TextAlign.right, style: pw.TextStyle(fontSize: 12, font: robotoFont))),
@@ -340,7 +340,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
     
     for (int i = 0; i < order.items.length; i++) {
       final item = order.items[i];
-      buffer.writeln('${i + 1}. ${item.customName ?? item.categoryName} (Qty: ${item.quantity})');
+      buffer.writeln('${i + 1}. ${item.displayName} (Qty: ${item.quantity})');
       buffer.writeln('   Price: ₹${fmt.format(item.price)} | Total: ₹${fmt.format(item.total)}');
     }
     
@@ -553,7 +553,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Expanded(flex: 1, child: Text('${index + 1}', style: const TextStyle(fontSize: 12))),
-                                              Expanded(flex: 4, child: Text(item.customName ?? item.categoryName, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
+                                              Expanded(flex: 4, child: Text(item.displayName, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),
                                               Expanded(flex: 1, child: Text('${item.quantity}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))),
                                               Expanded(flex: 2, child: Text('₹ ${fmt.format(item.price)}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12))),
                                               Expanded(flex: 2, child: Text('₹ ${fmt.format(item.total)}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
