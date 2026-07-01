@@ -302,7 +302,10 @@ async function saveOrUpdateOrderFromClient(clientOrder) {
   }
 
   const total = clientOrder.totalAmount || mappedItems.reduce((sum, i) => sum + i.amount, 0);
-  const advance = clientOrder.advanceAmount || 0;
+  let advance = clientOrder.advanceAmount || 0;
+  if (clientOrder.isPaid) {
+    advance = total;
+  }
   const balance = total - advance;
 
   // 5. Save or Update Order

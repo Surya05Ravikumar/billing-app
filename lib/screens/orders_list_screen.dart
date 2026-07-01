@@ -513,7 +513,7 @@ class OrderDetailScreen extends StatelessWidget {
                           items: order.items,
                           status: order.status,
                           isPaid: v,
-                          advanceAmount: order.advanceAmount,
+                          advanceAmount: v ? order.totalAmount : 0.0,
                         );
                         store.updateOrder(updated);
                       },

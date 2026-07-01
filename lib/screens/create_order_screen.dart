@@ -249,7 +249,7 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       items: items,
       status: widget.existingOrder?.status ?? OrderStatus.pending,
       isPaid: isPaidValue,
-      advanceAmount: advance,
+      advanceAmount: isPaidValue ? totalAmount : advance,
     );
 
       if (widget.existingOrder != null) {
