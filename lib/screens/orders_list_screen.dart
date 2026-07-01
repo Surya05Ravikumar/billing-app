@@ -49,7 +49,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => InvoicePreviewScreen(order: order, autoShare: true),
+                    builder: (_) => InvoicePreviewScreen(order: order),
                   ),
                 );
               }

@@ -12,6 +12,8 @@ import 'orders_list_screen.dart';
 import 'customers_screen.dart';
 import 'settings_screen.dart';
 import 'invoice_preview_screen.dart';
+import 'statistics_screen.dart';
+import '../utils/pdf_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,8 +26,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _tabs = [
-    const _DashboardTab(),
-    const OrdersListScreen(),
+    const _HomeOrdersTab(),
+    const StatisticsScreen(),
     const CustomersScreen(),
     const SettingsScreen(),
   ];
@@ -46,14 +48,14 @@ class _HomeScreenState extends State<HomeScreen> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long_outlined),
-            activeIcon: Icon(Icons.receipt_long),
-            label: 'Orders',
+            icon: Icon(Icons.analytics_outlined),
+            activeIcon: Icon(Icons.analytics),
+            label: 'Statistics',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.people_outline),
@@ -71,15 +73,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ---- Tab 0: Dashboard Tab ----
-class _DashboardTab extends StatelessWidget {
-  const _DashboardTab();
+// ---- Tab 0: Home Orders Tab (Redesigned Dashboard) ----
+class _HomeOrdersTab extends StatefulWidget {
+  const _HomeOrdersTab();
+
+  @override
+  State<_HomeOrdersTab> createState() => _HomeOrdersTabState();
+}
+
+class _HomeOrdersTabState extends State<_HomeOrdersTab> {
+  String _query = '';
+  OrderStatus? _filterStatus;
 
   @override
   Widget build(BuildContext context) {
     final store = context.watch<AppStore>();
-    final fmt = NumberFormat('#,##0.00', 'en_IN');
     final today = DateFormat('EEEE, dd MMM').format(DateTime.now());
+
+    // Filter and search orders
+    final orders = store.orders.where((o) {
+      final q = _query.toLowerCase().trim();
+      final matchQ = q.isEmpty ||
+          o.customerName.toLowerCase().contains(q) ||
+          o.customerPhone.contains(q) ||
+          (o.invoiceNo ?? '').toLowerCase().contains(q);
+      final matchStatus = _filterStatus == null || o.status == _filterStatus;
+      return matchQ && matchStatus;
+    }).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
@@ -131,203 +151,72 @@ class _DashboardTab extends StatelessWidget {
           ],
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Stats Grid with 1.7 ratio to compress empty space inside cards
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.7, // Flatten stats cards perfectly
+      body: Column(
+        children: [
+          // Search & Filters Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            color: Colors.white,
+            child: Column(
               children: [
-                StatCard(
-                  label: "Today's Orders",
-                  value: store.todayOrdersCount.toString(),
-                  color: AppTheme.accent,
-                  icon: Icons.receipt_long_outlined,
+                TextField(
+                  onChanged: (v) => setState(() => _query = v),
+                  style: const TextStyle(color: AppTheme.textDark, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Search by customer, phone, invoice...',
+                    hintStyle: const TextStyle(color: AppTheme.textLight, fontSize: 14),
+                    prefixIcon: const Icon(Icons.search, color: AppTheme.textMid, size: 20),
+                    filled: true,
+                    fillColor: AppTheme.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
                 ),
-                StatCard(
-                  label: 'Pending Deliveries',
-                  value: store.pendingDeliveries.toString(),
-                  color: AppTheme.warning,
-                  icon: Icons.local_shipping_outlined,
-                ),
-                StatCard(
-                  label: 'Completed',
-                  value: store.completedOrders.toString(),
-                  color: AppTheme.success,
-                  icon: Icons.check_circle_outline,
-                ),
-                StatCard(
-                  label: 'Pending Payments',
-                  value: '₹${fmt.format(store.totalPendingPayments)}',
-                  color: AppTheme.info,
-                  icon: Icons.account_balance_wallet_outlined,
+                const SizedBox(height: 10),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _HomeFilterChip(
+                        label: 'All',
+                        selected: _filterStatus == null,
+                        onSelected: (_) => setState(() => _filterStatus = null),
+                      ),
+                      ...OrderStatus.values.map((s) => _HomeFilterChip(
+                            label: '${s.emoji} ${s.label}',
+                            selected: _filterStatus == s,
+                            onSelected: (_) => setState(() =>
+                                _filterStatus = _filterStatus == s ? null : s),
+                          )),
+                    ],
+                  ),
                 ),
               ],
             ),
+          ),
 
-            const SizedBox(height: 24),
-
-            if (store.pendingReminderOrders.isNotEmpty) ...[
-              const SectionLabel('REMINDERS DUE'),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 115,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: store.pendingReminderOrders.length,
-                  itemBuilder: (context, index) {
-                    final order = store.pendingReminderOrders[index];
-                    final balance = order.pendingAmount;
-                    final daysElapsed = DateTime.now().difference(order.lastReminderSentAt ?? order.orderDate).inDays;
-                    
-                    return Container(
-                      width: 250,
-                      margin: const EdgeInsets.only(right: 12, bottom: 4),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.cardBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.warning.withOpacity(0.4), width: 1.5),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppTheme.warning.withOpacity(0.03),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  order.customerName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  'Inv #${order.invoiceNo ?? "1001"} · ₹${fmt.format(balance)} due',
-                                  style: const TextStyle(fontSize: 11, color: AppTheme.textMid),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  order.lastReminderSentAt != null 
-                                      ? 'Last sent: $daysElapsed days ago' 
-                                      : 'No reminder sent yet',
-                                  style: const TextStyle(fontSize: 10, color: AppTheme.warning, fontWeight: FontWeight.w500),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => InvoicePreviewScreen(order: order, autoShare: true),
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.warning,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            child: const Text(
-                              'Send',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // Filter upcoming due orders (delivery date between today and 1 week from now, and not delivered)
-            SectionLabel(
-              'UPCOMING DUE (1 WEEK)',
-              trailing: store.orders.isNotEmpty
-                  ? TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const OrdersListScreen()),
-                        );
-                      },
-                      child: const Text('See all'),
-                    )
-                  : null,
-            ),
-            const SizedBox(height: 12),
-
-            () {
-              final now = DateTime.now();
-              final todayStart = DateTime(now.year, now.month, now.day);
-              final oneWeekLater = todayStart.add(const Duration(days: 7));
-
-              final upcomingOrders = store.orders.where((o) {
-                final dDate = DateTime(o.deliveryDate.year, o.deliveryDate.month, o.deliveryDate.day);
-                return !dDate.isBefore(todayStart) &&
-                       !dDate.isAfter(oneWeekLater) &&
-                       o.status != OrderStatus.delivered;
-              }).toList();
-
-              if (upcomingOrders.isEmpty) {
-                return EmptyState(
-                  icon: Icons.assignment_outlined,
-                  title: 'No upcoming deliveries',
-                  subtitle: 'No orders due for delivery in the next 7 days.',
-                  action: ElevatedButton.icon(
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('New Order'),
-                    onPressed: () async {
-                      final order = await Navigator.push<Order?>(
-                        context,
-                        MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
-                      );
-                      if (order != null && !order.isPaid && context.mounted) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => InvoicePreviewScreen(order: order, autoShare: true),
-                          ),
-                        );
-                      }
+          // Orders List
+          Expanded(
+            child: orders.isEmpty
+                ? EmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: _query.isNotEmpty || _filterStatus != null
+                        ? 'No orders found'
+                        : 'No orders yet',
+                    subtitle: 'Create a new order to get started',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                    itemCount: orders.length,
+                    itemBuilder: (context, index) {
+                      return _HomeOrderCard(order: orders[index]);
                     },
                   ),
-                );
-              } else {
-                return Column(
-                  children: upcomingOrders.map((order) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _RecentOrderCard(order: order),
-                      )).toList(),
-                );
-              }
-            }(),
-
-            const SizedBox(height: 50),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
@@ -335,11 +224,11 @@ class _DashboardTab extends StatelessWidget {
             context,
             MaterialPageRoute(builder: (_) => const CreateOrderScreen()),
           );
-          if (order != null && !order.isPaid && context.mounted) {
+          if (order != null && context.mounted) {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => InvoicePreviewScreen(order: order, autoShare: true),
+                builder: (_) => InvoicePreviewScreen(order: order),
               ),
             );
           }
@@ -355,14 +244,58 @@ class _DashboardTab extends StatelessWidget {
   }
 }
 
-class _RecentOrderCard extends StatelessWidget {
-  final Order order;
-  const _RecentOrderCard({required this.order});
+class _HomeFilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final void Function(bool) onSelected;
+
+  const _HomeFilterChip({required this.label, required this.selected, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(label,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : AppTheme.textDark)),
+        selected: selected,
+        onSelected: onSelected,
+        backgroundColor: AppTheme.surface,
+        selectedColor: AppTheme.accent,
+        checkmarkColor: Colors.white,
+        side: const BorderSide(color: AppTheme.border),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+      ),
+    );
+  }
+}
+
+// ---- Custom Order Card as requested in Screenshot ----
+class _HomeOrderCard extends StatelessWidget {
+  final Order order;
+  const _HomeOrderCard({required this.order});
+
+  void _print(BuildContext context, AppStore store) async {
+    await PdfHelper.printInvoice(context, order, store);
+  }
+
+  void _share(BuildContext context, AppStore store) async {
+    await PdfHelper.shareInvoice(context, order, store);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = context.read<AppStore>();
     final fmt = NumberFormat('#,##0.00', 'en_IN');
-    final dateStr = DateFormat('dd MMM').format(order.deliveryDate);
+    final dateStr = DateFormat('dd MMM, yy').format(order.orderDate);
+
+    final bool isPaid = order.isPaid;
+    final String statusText = isPaid ? 'SALE : PAID' : 'SALE : UNPAID';
+    final Color badgeBg = isPaid ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0);
+    final Color badgeText = isPaid ? const Color(0xFF2E7D32) : const Color(0xFFE65100);
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -372,51 +305,187 @@ class _RecentOrderCard extends StatelessWidget {
         ),
       ),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppTheme.cardBg,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppTheme.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.01),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppTheme.accent.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Center(
-                child: Icon(Icons.content_cut, size: 18, color: AppTheme.accent),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    order.customerName,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.textDark),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "${order.items.length} item${order.items.length != 1 ? 's' : ''} · Due $dateStr",
-                    style: const TextStyle(fontSize: 15, color: AppTheme.textMid),
-                  ),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            // Row 1: Customer Name & Invoice No
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '₹${fmt.format(order.totalAmount)}',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: AppTheme.textDark),
+                Expanded(
+                  child: Text(
+                    order.customerName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                const SizedBox(height: 4),
-                StatusBadge(order.status),
+                Text(
+                  '#${order.invoiceNo ?? "1001"}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textLight,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+
+            // Row 2: Status Badge & Date
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: badgeText,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 10,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
+                Text(
+                  dateStr,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textLight,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Row 3: Total, Balance & Quick Actions
+            Row(
+              children: [
+                // Total
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Total',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '₹ ${fmt.format(order.totalAmount)}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Balance
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Balance',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textLight, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '₹ ${fmt.format(order.isPaid ? 0.0 : order.pendingAmount)}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                // Actions
+                IconButton(
+                  icon: const Icon(Icons.print_outlined, color: AppTheme.textLight, size: 20),
+                  onPressed: () => _print(context, store),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Print Invoice',
+                ),
+                const SizedBox(width: 16),
+                IconButton(
+                  icon: const Icon(Icons.reply_outlined, color: AppTheme.textLight, size: 20), // curved share arrow
+                  onPressed: () => _share(context, store),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Share Invoice',
+                ),
+                const SizedBox(width: 12),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_outlined, color: AppTheme.textLight, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'More options',
+                  onSelected: (val) async {
+                    if (val == 'edit') {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CreateOrderScreen(existingOrder: order),
+                        ),
+                      );
+                    } else if (val == 'delete') {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('Delete Order?'),
+                          content: const Text('This action cannot be undone.'),
+                          actions: [
+                            TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel')),
+                            TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                child: const Text('Delete')),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        store.deleteOrder(order.id);
+                      }
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: 'edit', child: Text('Edit Order')),
+                    const PopupMenuItem(value: 'delete', child: Text('Delete Order')),
+                  ],
+                ),
               ],
             ),
           ],
