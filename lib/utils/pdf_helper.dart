@@ -166,7 +166,7 @@ class PdfHelper {
                     ],
                   ),
                   
-                  // Grand Total Row
+                  // Totals Section
                   pw.Container(
                     decoration: pw.BoxDecoration(
                       border: pw.Border(
@@ -175,16 +175,46 @@ class PdfHelper {
                         bottom: pw.BorderSide(color: PdfColor.fromHex('#D4AF37')),
                       ),
                     ),
-                    padding: const pw.EdgeInsets.all(12),
-                    child: pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.end,
+                    padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    child: pw.Column(
                       children: [
-                        pw.Text('GRAND TOTAL', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, letterSpacing: 1.2)),
-                        pw.SizedBox(width: 30),
-                        pw.Container(
-                          width: 100, // Approximate width of SUBTOTAL column to align text
-                          alignment: pw.Alignment.centerRight,
-                          child: pw.Text('₹ ${fmt.format(order.totalAmount)}', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, font: robotoFont)),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.end,
+                          children: [
+                            pw.Text('GRAND TOTAL', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, letterSpacing: 1.2)),
+                            pw.SizedBox(width: 30),
+                            pw.Container(
+                              width: 100,
+                              alignment: pw.Alignment.centerRight,
+                              child: pw.Text('₹ ${fmt.format(order.totalAmount)}', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, font: robotoFont)),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.end,
+                          children: [
+                            pw.Text('ADVANCE PAID', style: pw.TextStyle(fontSize: 9, color: PdfColor.fromHex('#666666'))),
+                            pw.SizedBox(width: 30),
+                            pw.Container(
+                              width: 100,
+                              alignment: pw.Alignment.centerRight,
+                              child: pw.Text('₹ ${fmt.format(order.isPaid ? order.totalAmount : (order.advanceAmount ?? 0.0))}', style: pw.TextStyle(fontSize: 11, font: robotoFont)),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.end,
+                          children: [
+                            pw.Text('BALANCE DUE', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColor.fromHex('#D4AF37'))),
+                            pw.SizedBox(width: 30),
+                            pw.Container(
+                              width: 100,
+                              alignment: pw.Alignment.centerRight,
+                              child: pw.Text('₹ ${fmt.format(order.isPaid ? 0.0 : order.pendingAmount)}', style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, font: robotoFont, color: PdfColor.fromHex('#D4AF37'))),
+                            ),
+                          ],
                         ),
                       ],
                     ),

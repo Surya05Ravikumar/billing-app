@@ -283,7 +283,7 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                     ],
                                   ),
                                 ),
-                                // Grand Total
+                                // Totals Section
                                 Container(
                                   decoration: const BoxDecoration(
                                     border: Border(
@@ -292,16 +292,46 @@ class _InvoicePreviewScreenState extends State<InvoicePreviewScreen> {
                                       bottom: BorderSide(color: Color(0xFFD4AF37)),
                                     ),
                                   ),
-                                  padding: const EdgeInsets.all(12),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  child: Column(
                                     children: [
-                                      const Text('GRAND TOTAL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                                      const SizedBox(width: 20),
-                                      Container(
-                                        width: 80,
-                                        alignment: Alignment.centerRight,
-                                        child: Text('₹ ${fmt.format(order.totalAmount)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: [
+                                          const Text('GRAND TOTAL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                                          const SizedBox(width: 20),
+                                          Container(
+                                            width: 80,
+                                            alignment: Alignment.centerRight,
+                                            child: Text('₹ ${fmt.format(order.totalAmount)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: [
+                                          const Text('ADVANCE PAID', style: TextStyle(fontSize: 9, color: AppTheme.textLight)),
+                                          const SizedBox(width: 20),
+                                          Container(
+                                            width: 80,
+                                            alignment: Alignment.centerRight,
+                                            child: Text('₹ ${fmt.format(order.isPaid ? order.totalAmount : (order.advanceAmount ?? 0.0))}', style: const TextStyle(fontSize: 11)),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: [
+                                          const Text('BALANCE DUE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFD4AF37))),
+                                          const SizedBox(width: 20),
+                                          Container(
+                                            width: 80,
+                                            alignment: Alignment.centerRight,
+                                            child: Text('₹ ${fmt.format(order.isPaid ? 0.0 : order.pendingAmount)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFD4AF37))),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),
